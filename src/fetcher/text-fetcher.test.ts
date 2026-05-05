@@ -1,7 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TextFetcher } from './text-fetcher';
 
 describe('TextFetcher', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it('supports http and https URLs', () => {
     const fetcher = new TextFetcher();
     expect(fetcher.supports('https://example.com/article')).toBe(true);
