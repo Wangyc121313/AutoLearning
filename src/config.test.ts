@@ -13,6 +13,7 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(configDir, { recursive: true, force: true });
+  delete process.env.TEST_KEY;
 });
 
 describe('loadConfig', () => {
@@ -50,6 +51,20 @@ filename_template = "{title}-{date}.md"
 `);
     const config = loadConfig(configPath);
     expect(config.providers.openai?.apiKey).toBe('env-value');
-    delete process.env.TEST_KEY;
+  });
+
+  it('throws when config file does not exist', () => {
+    expect(() => loadConfig('/nonexistent/path/config.toml')).toThrow('Config file not found');
+  });
+
+  it('applies defaults when provider.default and output fields are missing', () => {
+    fs.writeFileSync(configPath, `
+[providers.claude]
+model = "claude-sonnet-4-6"
+`);
+    const config = loadConfig(configPath);
+    expect(config.provider.default).toBe('claude');
+    expect(config.output.directory).toBe('./notes');
+    expect(config.output.filenameTemplate).toBe('{title}-{date}.md');
   });
 });
