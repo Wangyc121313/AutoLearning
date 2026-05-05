@@ -11,17 +11,17 @@ export { VideoFetcher } from './video-fetcher';
 import { TextFetcher } from './text-fetcher';
 import { VideoFetcher } from './video-fetcher';
 
-const fetchers: Fetcher[] = [
-  new VideoFetcher({ transcriber: 'whisper' }),
-  new TextFetcher(),
-];
+const videoFetcher = new VideoFetcher({ transcriber: 'whisper' });
+const textFetcher = new TextFetcher();
+
+const fetchers: Fetcher[] = [videoFetcher, textFetcher];
 
 export function getFetcher(url: string, type: 'text' | 'video' | 'auto'): Fetcher {
-  if (type === 'text') return new TextFetcher();
-  if (type === 'video') return new VideoFetcher({ transcriber: 'whisper' });
+  if (type === 'text') return textFetcher;
+  if (type === 'video') return videoFetcher;
 
   for (const f of fetchers) {
     if (f.supports(url)) return f;
   }
-  return new TextFetcher();
+  return textFetcher;
 }

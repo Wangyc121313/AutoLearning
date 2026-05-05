@@ -1,5 +1,7 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { Fetcher } from './index';
 import type { FetchResult } from '../types';
 
@@ -36,28 +38,48 @@ export class VideoFetcher implements Fetcher {
     );
   }
 
-  extractSubtitles(url: string): string {
+  private extractSubtitles(url: string): string {
     const videoId = Date.now().toString(36);
-    execSync(
-      `yt-dlp --skip-download --write-auto-subs --sub-lang en,zh-Hans,zh --convert-subs vtt --output "${videoId}.%(ext)s" "${url}"`,
-      { encoding: 'utf-8', timeout: 60_000, stdio: 'pipe' }
-    );
+    const tmpDir = this.options.tmpDir ?? os.tmpdir();
 
-    // Look for generated subtitle files
-    const candidates = [`${videoId}.en.vtt`, `${videoId}.zh-Hans.vtt`, `${videoId}.zh.vtt`];
-    let subFile: string | null = null;
-    for (const c of candidates) {
-      if (fs.existsSync(c)) {
-        subFile = c;
-        break;
+    const candidates = [
+      path.join(tmpDir, `${videoId}.en.vtt`),
+      path.join(tmpDir, `${videoId}.zh-Hans.vtt`),
+      path.join(tmpDir, `${videoId}.zh.vtt`),
+    ];
+
+    try {
+      execFileSync('yt-dlp', [
+        '--skip-download', '--write-auto-subs',
+        '--sub-lang', 'en,zh-Hans,zh',
+        '--convert-subs', 'vtt',
+        '--output', path.join(tmpDir, `${videoId}.%(ext)s`),
+        url,
+      ], { encoding: 'utf-8', timeout: 60_000, stdio: 'pipe' });
+
+      // Look for generated subtitle files
+      let subFile: string | null = null;
+      for (const c of candidates) {
+        if (fs.existsSync(c)) {
+          subFile = c;
+          break;
+        }
+      }
+
+      if (!subFile) throw new Error('No subtitle file found');
+
+      const content = fs.readFileSync(subFile, 'utf-8');
+      return this.parseVTT(content);
+    } finally {
+      // Clean up all candidate subtitle files
+      for (const c of candidates) {
+        try {
+          if (fs.existsSync(c)) fs.unlinkSync(c);
+        } catch {
+          // Ignore cleanup errors
+        }
       }
     }
-
-    if (!subFile) throw new Error('No subtitle file found');
-
-    const content = fs.readFileSync(subFile, 'utf-8');
-    fs.unlinkSync(subFile);
-    return this.parseVTT(content);
   }
 
   private parseVTT(vtt: string): string {
@@ -75,15 +97,16 @@ export class VideoFetcher implements Fetcher {
       .join(' ');
   }
 
-  extractTitle(url: string): string {
+  private extractTitle(url: string): string {
     try {
-      const result = execSync(`yt-dlp --get-title "${url}"`, {
+      const result = execFileSync('yt-dlp', ['--get-title', url], {
         encoding: 'utf-8',
         timeout: 10_000,
         stdio: 'pipe',
       });
       return result.trim();
-    } catch {
+    } catch (err) {
+      console.warn('Failed to extract video title:', err);
       return 'Untitled Video';
     }
   }
