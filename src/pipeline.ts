@@ -10,10 +10,13 @@ export async function runPipeline(
   url: string,
   type: 'text' | 'video' | 'auto',
   config: Config,
-  providerOverride?: string,
+  options?: { providerOverride?: string; cookiesFromBrowser?: string },
 ): Promise<NoteOutput> {
   // 1. Fetch
-  const fetcher = getFetcher(url, type);
+  const fetcher = getFetcher(url, type, {
+    transcriber: 'whisper',
+    cookiesFromBrowser: options?.cookiesFromBrowser,
+  });
   console.error(`Fetching ${url} with ${fetcher.constructor.name}...`);
   const raw = await fetcher.fetch(url);
 
@@ -27,7 +30,7 @@ export async function runPipeline(
   const content = parseContent(raw, url, resolvedType);
 
   // 3. Generate
-  const provider = providerOverride ?? config.provider.default;
+  const provider = options?.providerOverride ?? config.provider.default;
   console.error(`Generating notes with ${provider}...`);
   const generator = getGenerator(provider, config.providers);
   const markdown = await generator.generate(content);

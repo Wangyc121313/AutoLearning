@@ -14,6 +14,7 @@ program
   .option('-t, --type <type>', 'Resource type: text, video, or auto', 'auto')
   .option('-c, --config <path>', 'Path to config file')
   .option('-v, --verbose', 'Enable verbose logging')
+  .option('--cookies-from-browser <browser>', 'Pass browser cookies to yt-dlp (e.g. firefox, chrome)')
   .action(async (url, options) => {
     try {
       const config = loadConfig(options.config);
@@ -26,7 +27,10 @@ program
         url,
         options.type as 'text' | 'video' | 'auto',
         config,
-        options.provider,
+        {
+          providerOverride: options.provider,
+          cookiesFromBrowser: options.cookiesFromBrowser,
+        },
       );
 
       console.log(`\nDone! Note saved to: ${result.filePath}`);

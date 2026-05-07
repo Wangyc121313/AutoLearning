@@ -54,7 +54,7 @@ describe('runPipeline', () => {
       'https://example.com/test',
       'text',
       mockConfig,
-      'claude',
+      { providerOverride: 'claude' },
     );
 
     expect(result.markdown).toBe('# Test Note\n\n## Summary\n\nGenerated test content.');
@@ -79,7 +79,7 @@ describe('runPipeline', () => {
       'https://example.com/auto-test',
       'auto',
       mockConfig,
-      'claude',
+      { providerOverride: 'claude' },
     );
 
     expect(result.filePath).toContain(notesDir);
@@ -99,7 +99,7 @@ describe('runPipeline', () => {
       'https://example.com/provider-test',
       'text',
       mockConfig,
-      'openai',
+      { providerOverride: 'openai' },
     );
 
     // Verify getGenerator was called with the override provider
@@ -128,7 +128,7 @@ describe('runPipeline', () => {
       'https://example.com/dir-test',
       'text',
       configWithNewDir,
-      'claude',
+      { providerOverride: 'claude' },
     );
 
     expect(fs.existsSync(newDir)).toBe(true);

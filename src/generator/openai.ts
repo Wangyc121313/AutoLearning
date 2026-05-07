@@ -18,8 +18,11 @@ Rules:
 export class OpenAIGenerator implements Generator {
   private client: OpenAI;
 
-  constructor(private config: { apiKey: string; model: string }) {
-    this.client = new OpenAI({ apiKey: config.apiKey });
+  constructor(private config: { apiKey: string; model: string; baseUrl?: string }) {
+    this.client = new OpenAI({
+      apiKey: config.apiKey,
+      ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
+    });
   }
 
   async generate(content: StructuredContent): Promise<string> {

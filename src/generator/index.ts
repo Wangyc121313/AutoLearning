@@ -24,7 +24,8 @@ export function getGenerator(
     case 'claude':
       return new ClaudeGenerator({ apiKey: cfg.apiKey ?? '', model: cfg.model });
     case 'openai':
-      return new OpenAIGenerator({ apiKey: cfg.apiKey ?? '', model: cfg.model });
+    case 'deepseek':
+      return new OpenAIGenerator({ apiKey: cfg.apiKey ?? '', model: cfg.model, baseUrl: cfg.baseUrl });
     case 'ollama':
       return new OllamaGenerator({ baseUrl: cfg.baseUrl ?? 'http://localhost:11434', model: cfg.model });
     default:

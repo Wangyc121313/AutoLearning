@@ -13,7 +13,15 @@ export class TextFetcher implements Fetcher {
     const timeout = setTimeout(() => controller.abort(), 30_000);
 
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        },
+      });
       if (!response.ok) {
         throw new Error(`Failed to fetch URL: ${url} (HTTP ${response.status})`);
       }

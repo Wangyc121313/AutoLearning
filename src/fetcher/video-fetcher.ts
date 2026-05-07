@@ -11,8 +11,14 @@ const VIDEO_URL_PATTERNS = [
   /bilibili\.com\/video\//,
 ];
 
+export interface VideoFetcherOptions {
+  transcriber: string;
+  tmpDir?: string;
+  cookiesFromBrowser?: string; // e.g. "firefox", "chrome"
+}
+
 export class VideoFetcher implements Fetcher {
-  constructor(private options: { transcriber: string; tmpDir?: string }) {}
+  constructor(private options: VideoFetcherOptions) {}
 
   supports(url: string): boolean {
     return VIDEO_URL_PATTERNS.some((p) => p.test(url));
@@ -43,21 +49,36 @@ export class VideoFetcher implements Fetcher {
     const tmpDir = this.options.tmpDir ?? os.tmpdir();
 
     const candidates = [
-      path.join(tmpDir, `${videoId}.en.vtt`),
       path.join(tmpDir, `${videoId}.zh-Hans.vtt`),
+      path.join(tmpDir, `${videoId}.zh-CN.vtt`),
       path.join(tmpDir, `${videoId}.zh.vtt`),
+      path.join(tmpDir, `${videoId}.zh-TW.vtt`),
+      path.join(tmpDir, `${videoId}.en.vtt`),
     ];
 
     try {
-      execFileSync('yt-dlp', [
-        '--skip-download', '--write-auto-subs',
-        '--sub-lang', 'en,zh-Hans,zh',
-        '--convert-subs', 'vtt',
-        '--output', path.join(tmpDir, `${videoId}.%(ext)s`),
-        url,
-      ], { encoding: 'utf-8', timeout: 60_000, stdio: 'pipe' });
+      // yt-dlp may exit non-zero if some subtitle languages fail (e.g. 429),
+      // but other language tracks may still have succeeded — check files regardless.
+      try {
+        const args: string[] = [
+          '--skip-download',
+          '--write-subs', '--write-auto-subs',
+          '--sub-lang', 'en,zh-Hans,zh,zh-CN,zh-TW',
+          '--convert-subs', 'vtt',
+          '--output', path.join(tmpDir, `${videoId}.%(ext)s`),
+        ];
+        if (this.options.cookiesFromBrowser) {
+          args.push('--cookies-from-browser', this.options.cookiesFromBrowser);
+        }
+        args.push(url);
 
-      // Look for generated subtitle files
+        execFileSync('yt-dlp', args, {
+          encoding: 'utf-8', timeout: 60_000, stdio: 'pipe',
+        });
+      } catch {
+        // Ignore non-zero exit; check for subtitle files below
+      }
+
       let subFile: string | null = null;
       for (const c of candidates) {
         if (fs.existsSync(c)) {
@@ -71,7 +92,6 @@ export class VideoFetcher implements Fetcher {
       const content = fs.readFileSync(subFile, 'utf-8');
       return this.parseVTT(content);
     } finally {
-      // Clean up all candidate subtitle files
       for (const c of candidates) {
         try {
           if (fs.existsSync(c)) fs.unlinkSync(c);
