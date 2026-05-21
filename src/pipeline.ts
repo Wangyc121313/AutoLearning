@@ -3,6 +3,7 @@ import { getFetcher } from './fetcher/index';
 import { getGenerator } from './generator/index';
 import { parseContent } from './parser/index';
 import { writeNote } from './output/index';
+import { LocalWhisperTranscriber } from './transcriber/local-whisper';
 import type { Config } from './config';
 import type { NoteOutput } from './types';
 
@@ -12,11 +13,17 @@ export async function runPipeline(
   config: Config,
   options?: { providerOverride?: string; cookiesFromBrowser?: string },
 ): Promise<NoteOutput> {
-  // 1. Fetch
-  const fetcher = getFetcher(url, type, {
-    transcriber: 'whisper',
-    cookiesFromBrowser: options?.cookiesFromBrowser,
+  // Create local whisper transcriber for video fallback
+  const transcriberInstance = new LocalWhisperTranscriber({
+    modelSize: config.localWhisper?.modelSize ?? 'base',
   });
+
+  // 1. Fetch
+  const fetcher = getFetcher(
+    url, type,
+    { transcriber: 'whisper', cookiesFromBrowser: options?.cookiesFromBrowser },
+    transcriberInstance,
+  );
   console.error(`Fetching ${url} with ${fetcher.constructor.name}...`);
   const raw = await fetcher.fetch(url);
 

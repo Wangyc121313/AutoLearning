@@ -13,6 +13,13 @@ vi.mock('./generator/index', () => ({
   OllamaGenerator: class {},
 }));
 
+// Mock LocalWhisperTranscriber to avoid python script dependency
+vi.mock('./transcriber/local-whisper', () => ({
+  LocalWhisperTranscriber: class {
+    async transcribe(_path: string) { return 'mock'; }
+  },
+}));
+
 import { runPipeline } from './pipeline';
 import { getGenerator } from './generator/index';
 import type { Config } from './config';
