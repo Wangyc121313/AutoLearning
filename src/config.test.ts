@@ -67,4 +67,41 @@ model = "claude-sonnet-4-6"
     expect(config.output.directory).toBe('./notes');
     expect(config.output.filenameTemplate).toBe('{title}-{date}.md');
   });
+
+  it('loads optional [local_whisper] section', () => {
+    fs.writeFileSync(configPath, `
+[provider]
+default = "deepseek"
+
+[providers.deepseek]
+api_key = "sk-test"
+model = "deepseek-chat"
+
+[output]
+directory = "./notes"
+filename_template = "{title}-{date}.md"
+
+[local_whisper]
+model_size = "small"
+`);
+    const config = loadConfig(configPath);
+    expect(config.localWhisper?.modelSize).toBe('small');
+  });
+
+  it('defaults model_size to base when not specified', () => {
+    fs.writeFileSync(configPath, `
+[provider]
+default = "deepseek"
+
+[providers.deepseek]
+api_key = "sk-test"
+model = "deepseek-chat"
+
+[output]
+directory = "./notes"
+filename_template = "{title}-{date}.md"
+`);
+    const config = loadConfig(configPath);
+    expect(config.localWhisper?.modelSize).toBe('base');
+  });
 });

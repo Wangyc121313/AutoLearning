@@ -19,6 +19,7 @@ export interface Config {
     accessKeySecret?: string;
     appKey?: string;
   };
+  localWhisper?: { modelSize: string };
 }
 
 function expandEnv(raw: string): string {
@@ -90,6 +91,16 @@ export function loadConfig(configPath?: string): Config {
       accessKeySecret: resolveExpanded(a, 'accessKeySecret', 'access_key_secret') || undefined,
       appKey: resolveExpanded(a, 'appKey', 'app_key') || undefined,
     };
+  }
+
+  // Parse local_whisper section
+  if (parsed.local_whisper) {
+    const lw = parsed.local_whisper as Record<string, unknown>;
+    cfg.localWhisper = {
+      modelSize: (lw.model_size as string) ?? (lw.modelSize as string) ?? 'base',
+    };
+  } else {
+    cfg.localWhisper = { modelSize: 'base' };
   }
 
   return cfg;
