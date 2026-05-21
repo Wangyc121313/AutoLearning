@@ -4,3 +4,4 @@ export interface Transcriber {
 
 export { WhisperTranscriber } from './whisper';
 export { AlibabaTranscriber } from './alibaba';
+export { LocalWhisperTranscriber } from './local-whisper';
