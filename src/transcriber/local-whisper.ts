@@ -1,11 +1,16 @@
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Transcriber } from './index';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const SCRIPT_PATH = path.resolve(__dirname, '..', '..', 'scripts', 'transcribe.py');
+const SCRIPT_PATH = [
+  path.resolve(__dirname, 'scripts', 'transcribe.py'),
+  path.resolve(__dirname, '..', 'scripts', 'transcribe.py'),
+  path.resolve(__dirname, '..', '..', 'scripts', 'transcribe.py'),
+].find((p) => fs.existsSync(p)) ?? path.resolve(__dirname, '..', 'scripts', 'transcribe.py');
 
 export class LocalWhisperTranscriber implements Transcriber {
   private pythonPath: string;
