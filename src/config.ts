@@ -19,7 +19,7 @@ export interface Config {
     accessKeySecret?: string;
     appKey?: string;
   };
-  localWhisper?: { modelSize: string };
+  localWhisper?: { modelSize: string; pythonPath?: string };
 }
 
 function expandEnv(raw: string): string {
@@ -98,6 +98,7 @@ export function loadConfig(configPath?: string): Config {
     const lw = parsed.local_whisper as Record<string, unknown>;
     cfg.localWhisper = {
       modelSize: (lw.model_size as string) ?? (lw.modelSize as string) ?? 'base',
+      pythonPath: resolveExpanded(lw, 'pythonPath', 'python_path') || undefined,
     };
   } else {
     cfg.localWhisper = { modelSize: 'base' };

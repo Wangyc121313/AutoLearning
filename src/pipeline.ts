@@ -16,6 +16,7 @@ export async function runPipeline(
   // Create local whisper transcriber for video fallback
   const transcriberInstance = new LocalWhisperTranscriber({
     modelSize: config.localWhisper?.modelSize ?? 'base',
+    pythonPath: config.localWhisper?.pythonPath,
   });
 
   // 1. Fetch

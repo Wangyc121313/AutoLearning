@@ -72,6 +72,7 @@ export class VideoFetcher implements Fetcher {
     const outputTemplate = path.join(tmpDir, `audio_${uniqueId}.%(ext)s`);
 
     const args = [
+      '--js-runtimes', 'node',
       '--format', 'bestaudio/best',
       '--output', outputTemplate,
       '--postprocessor-args', 'ffmpeg:-ac 1 -ar 16000',
@@ -121,6 +122,7 @@ export class VideoFetcher implements Fetcher {
       // but other language tracks may still have succeeded — check files regardless.
       try {
         const args: string[] = [
+          '--js-runtimes', 'node',
           '--skip-download',
           '--write-subs', '--write-auto-subs',
           '--sub-lang', 'en,zh-Hans,zh,zh-CN,zh-TW',
@@ -179,7 +181,7 @@ export class VideoFetcher implements Fetcher {
 
   private extractTitle(url: string): string {
     try {
-      const result = execFileSync('yt-dlp', ['--get-title', url], {
+      const result = execFileSync('yt-dlp', ['--js-runtimes', 'node', '--get-title', url], {
         encoding: 'utf-8',
         timeout: 10_000,
         stdio: 'pipe',
