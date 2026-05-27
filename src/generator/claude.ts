@@ -13,7 +13,8 @@ Rules:
 - Use bullet lists for enumeration
 - End with a ## Key Takeaways section
 - Do NOT fabricate any content not present in the source
-- Write in the same language as the source content`;
+- Write in the same language as the source content
+- When writing in Chinese, use Simplified Chinese (简体中文)`;
 
 export class ClaudeGenerator implements Generator {
   private client: Anthropic;
