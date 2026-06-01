@@ -258,9 +258,41 @@ var VideoFetcher = class {
     }
   }
   parseVTT(vtt) {
-    return vtt.split("\n").filter(
-      (line) => !line.startsWith("WEBVTT") && !line.match(/^\d{2}:/) && !line.match(/^\d+$/) && line.trim() !== ""
-    ).map((line) => line.replace(/<[^>]+>/g, "").trim()).filter(Boolean).join(" ");
+    const blocks = vtt.replace(/^WEBVTT[^\n]*\n/, "").split(/\n{2,}/);
+    const entries = [];
+    const seenTexts = /* @__PURE__ */ new Set();
+    for (const block of blocks) {
+      const lines = block.trim().split("\n");
+      const timingIdx = lines.findIndex((l) => l.includes("-->"));
+      if (timingIdx < 0) continue;
+      const timingLine = lines[timingIdx];
+      const match = timingLine.match(
+        /(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)\s*-->\s*(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)/
+      );
+      if (!match) continue;
+      const textLines = lines.slice(timingIdx + 1);
+      const rawText = textLines.join(" ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+      if (!rawText || rawText.length < 2 || seenTexts.has(rawText)) continue;
+      seenTexts.add(rawText);
+      entries.push({ text: rawText });
+    }
+    if (entries.length === 0) return "";
+    const deduped = [];
+    for (let i = 0; i < entries.length; i++) {
+      const current = entries[i];
+      let isIntermediate = false;
+      for (let j = i + 1; j < Math.min(i + 5, entries.length); j++) {
+        const next = entries[j];
+        if (next.text.startsWith(current.text) && next.text.length > current.text.length) {
+          isIntermediate = true;
+          break;
+        }
+      }
+      if (!isIntermediate) {
+        deduped.push(current);
+      }
+    }
+    return deduped.map((e) => e.text).join(" ");
   }
   extractTitle(url) {
     try {
@@ -562,6 +594,38 @@ function writeNote(markdown, title, directory, filenameTemplate) {
   return { markdown, filePath };
 }
 
+// src/output/sanitize.ts
+function sanitize(text) {
+  let result = text.trim();
+  result = result.replace(
+    /\n{1,2}(?:希望对你[^\n]{0,80}|如有需要[^\n]{0,80}|如需[^\n]{0,80}|欢迎反馈[^\n]{0,80}|请告诉[^\n]{0,80}|以上[^\n]{0,40}内容[^\n]{0,40})$/g,
+    ""
+  );
+  result = result.replace(
+    /\n{1,2}(?:let me know[^\n]{0,200}|feel free to[^\n]{0,200}|happy to[^\n]{0,200}|please let me know[^\n]{0,200}|don't hesitate[^\n]{0,200}|hope this helps[^\n]{0,200}|thanks for reading[^\n]{0,200})$/gi,
+    ""
+  );
+  result = result.replace(
+    /^(?:Here is (?:a |the )?(?:summary|note|transcript)[^\n]{0,200}\n{1,2}|以下是[^\n]{0,200}\n{1,2})/i,
+    ""
+  );
+  const lines = result.split("\n");
+  while (lines.length > 0) {
+    const last = lines[lines.length - 1].trim();
+    if (!last) {
+      lines.pop();
+      continue;
+    }
+    const lower = last.toLowerCase();
+    if (lower === "---" || /^(let me know|feel free|happy to|hope this|thanks for|please let|don't hesitate)/i.test(lower) || /^(希望|如有|如需|欢迎|请告诉|以上)/.test(lower)) {
+      lines.pop();
+      continue;
+    }
+    break;
+  }
+  return lines.join("\n").trim();
+}
+
 // src/transcriber/local-whisper.ts
 import { execFileSync as execFileSync2 } from "child_process";
 import fs4 from "fs";
@@ -589,6 +653,44 @@ var LocalWhisperTranscriber = class {
   }
 };
 
+// src/optimizer/index.ts
+import OpenAI2 from "openai";
+var OPTIMIZE_PROMPT = `You are a transcript cleaner. Given raw video transcript or subtitle text, clean it up into well-formatted prose.
+
+Rules:
+- Remove all timestamps (e.g., [00:01 - 00:03])
+- Remove metadata headers (Detected Language, Language Probability, etc.)
+- Fix obvious typos, homophone errors, and ASR mistakes
+- Recombine sentences that were split by timestamp boundaries into complete, grammatical sentences
+- Remove filler words and repetitions, but keep the original meaning
+- Group into natural paragraphs (3-8 sentences each) separated by blank lines
+- Output ONLY the cleaned text. No preamble, no "Here is the cleaned transcript", no meta-commentary
+- Write in the same language as the input`;
+var MIN_CHARS_FOR_OPTIMIZATION = 200;
+async function optimizeTranscript(rawText, config) {
+  if (rawText.length < MIN_CHARS_FOR_OPTIMIZATION) {
+    return rawText;
+  }
+  const client = new OpenAI2({
+    apiKey: config.apiKey ?? "",
+    ...config.baseUrl ? { baseURL: config.baseUrl } : {}
+  });
+  const response = await client.chat.completions.create({
+    model: config.model,
+    max_tokens: 4096,
+    temperature: 0.1,
+    messages: [
+      { role: "system", content: OPTIMIZE_PROMPT },
+      { role: "user", content: `Clean up the following transcript:
+
+${rawText}` }
+    ]
+  });
+  const text = response.choices[0]?.message?.content;
+  if (!text) throw new Error("Empty response from optimizer LLM");
+  return text.trim();
+}
+
 // src/pipeline.ts
 async function runPipeline(url, type, config, options) {
   const transcriberInstance = new LocalWhisperTranscriber({
@@ -604,11 +706,23 @@ async function runPipeline(url, type, config, options) {
   console.error(`Fetching ${url} with ${fetcher.constructor.name}...`);
   const raw = await fetcher.fetch(url);
   const resolvedType = type === "auto" ? fetcher.constructor.name === "VideoFetcher" ? "video" : "text" : type;
+  if (resolvedType === "video") {
+    const provider2 = options?.providerOverride ?? config.provider.default;
+    const providerConfig = config.providers[provider2];
+    if (providerConfig?.apiKey || providerConfig?.baseUrl) {
+      console.error("Optimizing transcript...");
+      try {
+        raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+      } catch (err) {
+        console.error("Transcript optimization failed, using raw text:", err.message);
+      }
+    }
+  }
   const content = parseContent(raw, url, resolvedType);
   const provider = options?.providerOverride ?? config.provider.default;
   console.error(`Generating notes with ${provider}...`);
   const generator = getGenerator(provider, config.providers);
-  const markdown = await generator.generate(content);
+  const markdown = sanitize(await generator.generate(content));
   const outDir = config.output.directory;
   if (!fs5.existsSync(outDir)) {
     fs5.mkdirSync(outDir, { recursive: true });
