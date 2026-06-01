@@ -5,6 +5,7 @@ import { parseContent } from './parser/index';
 import { writeNote } from './output/index';
 import { sanitize } from './output/sanitize';
 import { LocalWhisperTranscriber } from './transcriber/local-whisper';
+import { optimizeTranscript } from './optimizer/index';
 import type { Config } from './config';
 import type { NoteOutput } from './types';
 
@@ -36,6 +37,21 @@ export async function runPipeline(
         ? 'video'
         : 'text'
       : type;
+
+  // 2.1 Optimize transcript for video content
+  if (resolvedType === 'video') {
+    const provider = options?.providerOverride ?? config.provider.default;
+    const providerConfig = config.providers[provider];
+    if (providerConfig?.apiKey || providerConfig?.baseUrl) {
+      console.error('Optimizing transcript...');
+      try {
+        raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+      } catch (err) {
+        console.error('Transcript optimization failed, using raw text:', (err as Error).message);
+      }
+    }
+  }
+
   const content = parseContent(raw, url, resolvedType);
 
   // 3. Generate
