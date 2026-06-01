@@ -165,18 +165,63 @@ export class VideoFetcher implements Fetcher {
   }
 
   private parseVTT(vtt: string): string {
-    return vtt
-      .split('\n')
-      .filter(
-        (line) =>
-          !line.startsWith('WEBVTT') &&
-          !line.match(/^\d{2}:/) &&
-          !line.match(/^\d+$/) &&
-          line.trim() !== ''
-      )
-      .map((line) => line.replace(/<[^>]+>/g, '').trim())
-      .filter(Boolean)
-      .join(' ');
+    // Split into cue blocks (separated by blank lines)
+    const blocks = vtt
+      .replace(/^WEBVTT[^\n]*\n/, '')
+      .split(/\n{2,}/);
+
+    const entries: { text: string }[] = [];
+    const seenTexts = new Set<string>();
+
+    for (const block of blocks) {
+      const lines = block.trim().split('\n');
+      const timingIdx = lines.findIndex((l) => l.includes('-->'));
+      if (timingIdx < 0) continue;
+
+      const timingLine = lines[timingIdx];
+      const match = timingLine.match(
+        /(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)\s*-->\s*(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)/,
+      );
+      if (!match) continue;
+
+      const textLines = lines.slice(timingIdx + 1);
+      const rawText = textLines
+        .join(' ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!rawText || rawText.length < 2 || seenTexts.has(rawText)) continue;
+      seenTexts.add(rawText);
+
+      entries.push({ text: rawText });
+    }
+
+    if (entries.length === 0) return '';
+
+    // YouTube scrolling-append dedup:
+    // If entry[i].text is a prefix of a later entry's text (within next 4), discard entry[i]
+    const deduped: typeof entries = [];
+    for (let i = 0; i < entries.length; i++) {
+      const current = entries[i];
+      let isIntermediate = false;
+      for (let j = i + 1; j < Math.min(i + 5, entries.length); j++) {
+        const next = entries[j];
+        if (next.text.startsWith(current.text) && next.text.length > current.text.length) {
+          isIntermediate = true;
+          break;
+        }
+      }
+      if (!isIntermediate) {
+        deduped.push(current);
+      }
+    }
+
+    return deduped.map((e) => e.text).join(' ');
   }
 
   private extractTitle(url: string): string {
