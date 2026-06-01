@@ -409,7 +409,7 @@ var SYSTEM_PROMPT2 = `You are an expert study note writer. Given the content of 
 **Make it memorable:**
 - Start with a **> TL;DR** \u2014 one bold sentence that captures the core insight
 - Use **bold** sparingly: only for the 3-5 most important concepts, not every term
-- Led $$ and $$$ for visual separation between major topics (not between every section)
+- Use --- for visual separation between major topics (do not overuse)
 - Use > blockquotes for standout definitions, surprising facts, or memorable quotes
 - Include concrete examples and analogies \u2014 these stick better than abstract definitions
 
