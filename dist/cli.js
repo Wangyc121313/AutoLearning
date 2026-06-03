@@ -82,6 +82,7 @@ function loadConfig(configPath) {
 import fs5 from "fs";
 
 // src/fetcher/text-fetcher.ts
+import { execFileSync } from "child_process";
 var JINA_BASE = "https://r.jina.ai/";
 var TextFetcher = class {
   supports(_url) {
@@ -89,30 +90,38 @@ var TextFetcher = class {
   }
   async fetch(url) {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8e3);
-      try {
-        const response = await fetch(`${JINA_BASE}${encodeURIComponent(url)}`, {
-          signal: controller.signal,
-          headers: {
-            "Accept": "text/markdown,text/plain,*/*",
-            "User-Agent": "AutoLearning/0.1"
-          }
-        });
-        if (response.ok) {
-          const text = await response.text();
-          const title = this.extractTitleFromMarkdown(text) ?? url;
-          if (text.trim().length > 100) {
-            return { title, rawText: text };
-          }
-        }
-      } finally {
-        clearTimeout(timeout);
-      }
+      const result = await this.fetchViaJina(url);
+      if (result) return result;
     } catch {
     }
     console.error("r.jina.ai failed, trying direct fetch...");
     return this.directFetch(url);
+  }
+  async fetchViaJina(url) {
+    const encoded = encodeURIComponent(url);
+    const jinaUrl = `${JINA_BASE}${encoded}`;
+    return new Promise((resolve, reject) => {
+      try {
+        const stdout = execFileSync("curl", [
+          "--silent",
+          "--max-time",
+          "15",
+          "-H",
+          "Accept: text/markdown,text/plain,*/*",
+          "-H",
+          "User-Agent: AutoLearning/0.1",
+          jinaUrl
+        ], { encoding: "utf-8", timeout: 2e4, stdio: "pipe" });
+        if (!stdout || stdout.trim().length < 100) {
+          resolve(null);
+          return;
+        }
+        const title = this.extractTitleFromMarkdown(stdout) ?? url;
+        resolve({ title, rawText: stdout.trim() });
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
   async directFetch(url) {
     const controller = new AbortController();
@@ -153,7 +162,7 @@ var TextFetcher = class {
 };
 
 // src/fetcher/video-fetcher.ts
-import { execFileSync } from "child_process";
+import { execFileSync as execFileSync2 } from "child_process";
 import fs2 from "fs";
 import os2 from "os";
 import path2 from "path";
@@ -222,7 +231,7 @@ var VideoFetcher = class {
       args.push("--cookies-from-browser", this.options.cookiesFromBrowser);
     }
     args.push(url);
-    execFileSync("yt-dlp", args, {
+    execFileSync2("yt-dlp", args, {
       encoding: "utf-8",
       timeout: 12e4,
       stdio: "pipe"
@@ -264,7 +273,7 @@ var VideoFetcher = class {
           args.push("--cookies-from-browser", this.options.cookiesFromBrowser);
         }
         args.push(url);
-        execFileSync("yt-dlp", args, {
+        execFileSync2("yt-dlp", args, {
           encoding: "utf-8",
           timeout: 6e4,
           stdio: "pipe"
@@ -329,7 +338,7 @@ var VideoFetcher = class {
   }
   extractTitle(url) {
     try {
-      const result = execFileSync("yt-dlp", ["--js-runtimes", "node", "--get-title", url], {
+      const result = execFileSync2("yt-dlp", ["--js-runtimes", "node", "--get-title", url], {
         encoding: "utf-8",
         timeout: 1e4,
         stdio: "pipe"
@@ -660,7 +669,7 @@ function sanitize(text) {
 }
 
 // src/transcriber/local-whisper.ts
-import { execFileSync as execFileSync2 } from "child_process";
+import { execFileSync as execFileSync3 } from "child_process";
 import fs4 from "fs";
 import path4 from "path";
 import { fileURLToPath } from "url";
@@ -678,7 +687,7 @@ var LocalWhisperTranscriber = class {
   config;
   pythonPath;
   async transcribe(audioPath) {
-    return execFileSync2(this.pythonPath, [SCRIPT_PATH, audioPath, this.config.modelSize], {
+    return execFileSync3(this.pythonPath, [SCRIPT_PATH, audioPath, this.config.modelSize], {
       encoding: "utf-8",
       timeout: 6e5
       // 10 minutes max

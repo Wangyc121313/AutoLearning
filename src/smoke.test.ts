@@ -9,6 +9,17 @@ import { writeNote } from './output/index';
 import { getFetcher } from './fetcher/index';
 import { getGenerator } from './generator/index';
 
+// Mock execFileSync — TextFetcher uses curl via it
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    execFileSync: vi.fn().mockImplementation(() => {
+      throw new Error('not available in test');
+    }),
+  };
+});
+
 const testDir = path.join(os.tmpdir(), 'autolearning-smoke-' + Date.now());
 const notesDir = path.join(testDir, 'notes');
 const configDir = path.join(testDir, 'config');
@@ -45,10 +56,10 @@ describe('Autolearning smoke test', () => {
     expect(config.provider.default).toBe('claude');
 
     // Fetch
-    const mockMarkdown = `# Smoke Test Article\n\nHello. This is content for the smoke test. It has enough text to pass any minimum length checks that exist in the pipeline.\n\n## Section\n\nMore content here to ensure the raw text is long enough.`;
+    const mockHtml = `<html><head><title>Smoke Test Article</title></head><body><article><h1>Hello</h1><p>This is content for the smoke test. It has enough text to pass any minimum length checks that exist in the pipeline.</p><p>More content here to ensure the raw text is long enough for validation.</p></article></body></html>`;
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      text: () => Promise.resolve(mockMarkdown),
+      text: () => Promise.resolve(mockHtml),
     });
 
     const fetcher = getFetcher('https://example.com/article', 'text');

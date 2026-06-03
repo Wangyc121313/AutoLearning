@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import type { Fetcher } from './index';
 import type { FetchResult } from '../types';
 
@@ -5,45 +6,48 @@ const JINA_BASE = 'https://r.jina.ai/';
 
 export class TextFetcher implements Fetcher {
   supports(_url: string): boolean {
-    return true; // TextFetcher is the fallback for all HTTP URLs
+    return true;
   }
 
   async fetch(url: string): Promise<FetchResult> {
-
-    // Strategy 1: r.jina.ai proxy (handles anti-bot, returns clean Markdown)
+    // Strategy 1: r.jina.ai via curl (handles anti-bot, returns clean Markdown)
+    // Using curl subprocess because Node.js fetch() has DNS issues in some networks
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8_000);
-
-      try {
-        const response = await fetch(`${JINA_BASE}${encodeURIComponent(url)}`, {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'text/markdown,text/plain,*/*',
-            'User-Agent': 'AutoLearning/0.1',
-          },
-        });
-
-        if (response.ok) {
-          const text = await response.text();
-          const title = this.extractTitleFromMarkdown(text) ?? url;
-
-          if (text.trim().length > 100) {
-            return { title, rawText: text };
-          }
-          // Fall through to strategy 2 if content is too short
-        }
-        // Fall through to strategy 2 on non-ok
-      } finally {
-        clearTimeout(timeout);
-      }
+      const result = await this.fetchViaJina(url);
+      if (result) return result;
     } catch {
-      // r.jina.ai failed — fall through to strategy 2
+      // Fall through to strategy 2
     }
 
-    // Strategy 2: direct fetch with browser-like headers
+    // Strategy 2: direct fetch with Readability
     console.error('r.jina.ai failed, trying direct fetch...');
     return this.directFetch(url);
+  }
+
+  private async fetchViaJina(url: string): Promise<FetchResult | null> {
+    const encoded = encodeURIComponent(url);
+    const jinaUrl = `${JINA_BASE}${encoded}`;
+
+    return new Promise((resolve, reject) => {
+      try {
+        const stdout = execFileSync('curl', [
+          '--silent', '--max-time', '15',
+          '-H', 'Accept: text/markdown,text/plain,*/*',
+          '-H', 'User-Agent: AutoLearning/0.1',
+          jinaUrl,
+        ], { encoding: 'utf-8', timeout: 20_000, stdio: 'pipe' });
+
+        if (!stdout || stdout.trim().length < 100) {
+          resolve(null);
+          return;
+        }
+
+        const title = this.extractTitleFromMarkdown(stdout) ?? url;
+        resolve({ title, rawText: stdout.trim() });
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 
   private async directFetch(url: string): Promise<FetchResult> {
