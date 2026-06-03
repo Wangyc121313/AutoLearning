@@ -80,16 +80,44 @@ function loadConfig(configPath) {
 import fs5 from "fs";
 
 // src/fetcher/text-fetcher.ts
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
+var JINA_BASE = "https://r.jina.ai/";
 var TextFetcher = class {
   supports(_url) {
     return true;
   }
   async fetch(url) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3e4);
+      try {
+        const response = await fetch(`${JINA_BASE}${url}`, {
+          signal: controller.signal,
+          headers: {
+            "Accept": "text/markdown,text/plain,*/*",
+            "User-Agent": "AutoLearning/0.1"
+          }
+        });
+        if (response.ok) {
+          const text = await response.text();
+          const title = this.extractTitleFromMarkdown(text) ?? url;
+          if (text.trim().length > 100) {
+            return { title, rawText: text };
+          }
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch {
+    }
+    console.error("r.jina.ai failed, trying direct fetch...");
+    return this.directFetch(url);
+  }
+  async directFetch(url) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3e4);
     try {
+      const { JSDOM } = await import("jsdom");
+      const { Readability } = await import("@mozilla/readability");
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
@@ -102,20 +130,23 @@ var TextFetcher = class {
         throw new Error(`Failed to fetch URL: ${url} (HTTP ${response.status})`);
       }
       const html = await response.text();
-      try {
-        const dom = new JSDOM(html, { url });
-        const reader = new Readability(dom.window.document);
-        const article = reader.parse();
-        return {
-          title: article?.title ?? dom.window.document.title ?? "Untitled",
-          rawText: article?.textContent ?? dom.window.document.body?.textContent ?? ""
-        };
-      } catch (parseError) {
-        throw new Error(`Failed to parse content from ${url}: ${parseError.message}`);
-      }
+      const dom = new JSDOM(html, { url });
+      const reader = new Readability(dom.window.document);
+      const article = reader.parse();
+      return {
+        title: article?.title ?? dom.window.document.title ?? "Untitled",
+        rawText: article?.textContent ?? dom.window.document.body?.textContent ?? ""
+      };
     } finally {
       clearTimeout(timeout);
     }
+  }
+  extractTitleFromMarkdown(markdown) {
+    const match = markdown.match(/^Title:\s*(.+)$/m);
+    if (match) return match[1].trim();
+    const h1Match = markdown.match(/^#\s+(.+)$/m);
+    if (h1Match) return h1Match[1].trim();
+    return null;
   }
 };
 
@@ -655,16 +686,17 @@ var LocalWhisperTranscriber = class {
 
 // src/optimizer/index.ts
 import OpenAI2 from "openai";
-var OPTIMIZE_PROMPT = `You are a transcript cleaner. Given raw video transcript or subtitle text, clean it up into well-formatted prose.
+var OPTIMIZE_PROMPT = `You are a content cleaner. Given raw text from a video transcript, subtitle file, or web page, clean it up into well-formatted prose for study notes.
 
 Rules:
-- Remove all timestamps (e.g., [00:01 - 00:03])
-- Remove metadata headers (Detected Language, Language Probability, etc.)
-- Fix obvious typos, homophone errors, and ASR mistakes
-- Recombine sentences that were split by timestamp boundaries into complete, grammatical sentences
+- For video/transcript: remove all timestamps (e.g., [00:01 - 00:03]), metadata headers, fix ASR typos, recombine split sentences
+- For web content: remove navigation text, sidebars, ads, footers, comment sections, and other non-article noise
+- Remove any Markdown heading like "Title: ..." that duplicates the extracted title
+- Fix obvious typos and grammar issues
 - Remove filler words and repetitions, but keep the original meaning
 - Group into natural paragraphs (3-8 sentences each) separated by blank lines
-- Output ONLY the cleaned text. No preamble, no "Here is the cleaned transcript", no meta-commentary
+- Preserve important facts, numbers, quotes, and definitions exactly as written
+- Output ONLY the cleaned text. No preamble, no meta-commentary
 - Write in the same language as the input`;
 var MIN_CHARS_FOR_OPTIMIZATION = 200;
 async function optimizeTranscript(rawText, config) {
@@ -681,7 +713,7 @@ async function optimizeTranscript(rawText, config) {
     temperature: 0.1,
     messages: [
       { role: "system", content: OPTIMIZE_PROMPT },
-      { role: "user", content: `Clean up the following transcript:
+      { role: "user", content: `Clean up the following content:
 
 ${rawText}` }
     ]
@@ -706,7 +738,7 @@ async function runPipeline(url, type, config, options) {
   console.error(`Fetching ${url} with ${fetcher.constructor.name}...`);
   const raw = await fetcher.fetch(url);
   const resolvedType = type === "auto" ? fetcher.constructor.name === "VideoFetcher" ? "video" : "text" : type;
-  if (resolvedType === "video") {
+  if (true) {
     const provider2 = options?.providerOverride ?? config.provider.default;
     const providerConfig = config.providers[provider2];
     if (providerConfig?.apiKey || providerConfig?.baseUrl) {

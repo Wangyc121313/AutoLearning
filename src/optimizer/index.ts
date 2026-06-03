@@ -1,16 +1,17 @@
 import OpenAI from 'openai';
 import type { ProviderConfig } from '../config';
 
-const OPTIMIZE_PROMPT = `You are a transcript cleaner. Given raw video transcript or subtitle text, clean it up into well-formatted prose.
+const OPTIMIZE_PROMPT = `You are a content cleaner. Given raw text from a video transcript, subtitle file, or web page, clean it up into well-formatted prose for study notes.
 
 Rules:
-- Remove all timestamps (e.g., [00:01 - 00:03])
-- Remove metadata headers (Detected Language, Language Probability, etc.)
-- Fix obvious typos, homophone errors, and ASR mistakes
-- Recombine sentences that were split by timestamp boundaries into complete, grammatical sentences
+- For video/transcript: remove all timestamps (e.g., [00:01 - 00:03]), metadata headers, fix ASR typos, recombine split sentences
+- For web content: remove navigation text, sidebars, ads, footers, comment sections, and other non-article noise
+- Remove any Markdown heading like "Title: ..." that duplicates the extracted title
+- Fix obvious typos and grammar issues
 - Remove filler words and repetitions, but keep the original meaning
 - Group into natural paragraphs (3-8 sentences each) separated by blank lines
-- Output ONLY the cleaned text. No preamble, no "Here is the cleaned transcript", no meta-commentary
+- Preserve important facts, numbers, quotes, and definitions exactly as written
+- Output ONLY the cleaned text. No preamble, no meta-commentary
 - Write in the same language as the input`;
 
 const MIN_CHARS_FOR_OPTIMIZATION = 200;
@@ -34,7 +35,7 @@ export async function optimizeTranscript(
     temperature: 0.1,
     messages: [
       { role: 'system', content: OPTIMIZE_PROMPT },
-      { role: 'user', content: `Clean up the following transcript:\n\n${rawText}` },
+      { role: 'user', content: `Clean up the following content:\n\n${rawText}` },
     ],
   });
 

@@ -45,10 +45,10 @@ describe('Autolearning smoke test', () => {
     expect(config.provider.default).toBe('claude');
 
     // Fetch
-    const mockHtml = `<html><head><title>Smoke Test Article</title></head><body><article><h1>Hello</h1><p>This is content for the smoke test.</p></article></body></html>`;
+    const mockMarkdown = `# Smoke Test Article\n\nHello. This is content for the smoke test. It has enough text to pass any minimum length checks that exist in the pipeline.\n\n## Section\n\nMore content here to ensure the raw text is long enough.`;
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      text: () => Promise.resolve(mockHtml),
+      text: () => Promise.resolve(mockMarkdown),
     });
 
     const fetcher = getFetcher('https://example.com/article', 'text');

@@ -38,8 +38,8 @@ export async function runPipeline(
         : 'text'
       : type;
 
-  // 2.1 Optimize transcript for video content
-  if (resolvedType === 'video') {
+  // 2.1 Optimize raw content before parsing
+  if (true) {
     const provider = options?.providerOverride ?? config.provider.default;
     const providerConfig = config.providers[provider];
     if (providerConfig?.apiKey || providerConfig?.baseUrl) {
