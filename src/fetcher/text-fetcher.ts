@@ -16,7 +16,7 @@ export class TextFetcher implements Fetcher {
       const timeout = setTimeout(() => controller.abort(), 30_000);
 
       try {
-        const response = await fetch(`${JINA_BASE}${url}`, {
+        const response = await fetch(`${JINA_BASE}${encodeURIComponent(url)}`, {
           signal: controller.signal,
           headers: {
             'Accept': 'text/markdown,text/plain,*/*',

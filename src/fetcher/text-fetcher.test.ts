@@ -39,7 +39,7 @@ describe('TextFetcher', () => {
 
     // Verify r.jina.ai URL was used
     const fetchUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(fetchUrl).toBe('https://r.jina.ai/https://example.com/article');
+    expect(fetchUrl).toBe(`https://r.jina.ai/${encodeURIComponent('https://example.com/article')}`);
   });
 
   it('falls back to direct fetch when r.jina.ai fails', async () => {
@@ -60,7 +60,7 @@ describe('TextFetcher', () => {
 
     // Verify both strategies were tried
     const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0]).toBe('https://r.jina.ai/https://example.com/article');
+    expect(calls[0][0]).toBe(`https://r.jina.ai/${encodeURIComponent('https://example.com/article')}`);
     expect(calls[1][0]).toBe('https://example.com/article');
   });
 

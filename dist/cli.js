@@ -90,7 +90,7 @@ var TextFetcher = class {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3e4);
       try {
-        const response = await fetch(`${JINA_BASE}${url}`, {
+        const response = await fetch(`${JINA_BASE}${encodeURIComponent(url)}`, {
           signal: controller.signal,
           headers: {
             "Accept": "text/markdown,text/plain,*/*",
