@@ -9,6 +9,43 @@ import { optimizeTranscript } from './optimizer/index';
 import type { Config } from './config';
 import type { NoteOutput } from './types';
 
+/** Run pipeline from raw text input (file, stdin, etc.) — bypasses fetcher. */
+export async function runPipelineFromText(
+  text: string,
+  title: string,
+  sourceLabel: string,
+  config: Config,
+  options?: { providerOverride?: string },
+): Promise<NoteOutput> {
+  const raw = { title, rawText: text };
+
+  // Optimize
+  const provider = options?.providerOverride ?? config.provider.default;
+  const providerConfig = config.providers[provider];
+  if (providerConfig?.apiKey || providerConfig?.baseUrl) {
+    console.error('Optimizing content...');
+    try {
+      raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+    } catch (err) {
+      console.error('Optimization failed, using raw text:', (err as Error).message);
+    }
+  }
+
+  const content = parseContent(raw, sourceLabel, 'text');
+  console.error(`Generating notes with ${provider}...`);
+  const generator = getGenerator(provider, config.providers);
+  const markdown = sanitize(await generator.generate(content));
+
+  const outDir = config.output.directory;
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir, { recursive: true });
+  }
+
+  const result = writeNote(markdown, content.title, outDir, config.output.filenameTemplate);
+  console.error(`Note written to ${result.filePath}`);
+  return result;
+}
+
 export async function runPipeline(
   url: string,
   type: 'text' | 'video' | 'auto',

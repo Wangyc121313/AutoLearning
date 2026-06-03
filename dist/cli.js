@@ -2,6 +2,8 @@
 
 // src/cli.ts
 import { Command } from "commander";
+import fs6 from "fs";
+import path5 from "path";
 
 // src/config.ts
 import fs from "fs";
@@ -724,6 +726,30 @@ ${rawText}` }
 }
 
 // src/pipeline.ts
+async function runPipelineFromText(text, title, sourceLabel, config, options) {
+  const raw = { title, rawText: text };
+  const provider = options?.providerOverride ?? config.provider.default;
+  const providerConfig = config.providers[provider];
+  if (providerConfig?.apiKey || providerConfig?.baseUrl) {
+    console.error("Optimizing content...");
+    try {
+      raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+    } catch (err) {
+      console.error("Optimization failed, using raw text:", err.message);
+    }
+  }
+  const content = parseContent(raw, sourceLabel, "text");
+  console.error(`Generating notes with ${provider}...`);
+  const generator = getGenerator(provider, config.providers);
+  const markdown = sanitize(await generator.generate(content));
+  const outDir = config.output.directory;
+  if (!fs5.existsSync(outDir)) {
+    fs5.mkdirSync(outDir, { recursive: true });
+  }
+  const result = writeNote(markdown, content.title, outDir, config.output.filenameTemplate);
+  console.error(`Note written to ${result.filePath}`);
+  return result;
+}
 async function runPipeline(url, type, config, options) {
   const transcriberInstance = new LocalWhisperTranscriber({
     modelSize: config.localWhisper?.modelSize ?? "base",
@@ -766,11 +792,41 @@ async function runPipeline(url, type, config, options) {
 
 // src/cli.ts
 var program = new Command();
-program.name("autolearn").description("Generate structured Markdown study notes from URLs").argument("<url>", "URL of the resource to learn from").option("-p, --provider <name>", "AI provider: claude, openai, or ollama").option("-o, --output <dir>", "Output directory for notes").option("-t, --type <type>", "Resource type: text, video, or auto", "auto").option("-c, --config <path>", "Path to config file").option("-v, --verbose", "Enable verbose logging").option("--cookies-from-browser <browser>", "Pass browser cookies to yt-dlp (e.g. firefox, chrome)").action(async (url, options) => {
+program.name("autolearn").description("Generate structured Markdown study notes from URLs or local files").argument("[url]", "URL of the resource to learn from (optional if using --file or --stdin)").option("-p, --provider <name>", "AI provider").option("-o, --output <dir>", "Output directory for notes").option("-t, --type <type>", "Resource type: text, video, or auto", "auto").option("-c, --config <path>", "Path to config file").option("-v, --verbose", "Enable verbose logging").option("--cookies-from-browser <browser>", "Pass browser cookies to yt-dlp (e.g. firefox, chrome)").option("--file <path>", "Read content from a local file (.md, .txt, etc.)").option("--stdin", "Read content from standard input").option("--title <title>", "Title for the notes (used with --file or --stdin)").action(async (url, options) => {
   try {
     const config = loadConfig(options.config);
     if (options.output) {
       config.output.directory = options.output;
+    }
+    if (options.file || options.stdin) {
+      let text;
+      let title;
+      let sourceLabel;
+      if (options.stdin) {
+        text = await readStdin();
+        title = options.title ?? "User Input";
+        sourceLabel = "stdin";
+      } else {
+        const filePath = path5.resolve(options.file);
+        if (!fs6.existsSync(filePath)) {
+          throw new Error(`File not found: ${filePath}`);
+        }
+        text = fs6.readFileSync(filePath, "utf-8");
+        title = options.title ?? path5.basename(filePath, path5.extname(filePath));
+        sourceLabel = `file:${filePath}`;
+      }
+      if (!text.trim()) {
+        throw new Error("Input is empty");
+      }
+      const result2 = await runPipelineFromText(text, title, sourceLabel, config, {
+        providerOverride: options.provider
+      });
+      console.log(`
+Done! Note saved to: ${result2.filePath}`);
+      return;
+    }
+    if (!url) {
+      throw new Error("Please provide a URL, or use --file or --stdin");
     }
     const result = await runPipeline(
       url,
@@ -791,4 +847,13 @@ Done! Note saved to: ${result.filePath}`);
     process.exit(1);
   }
 });
+function readStdin() {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    process.stdin.setEncoding("utf-8");
+    process.stdin.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+    process.stdin.on("error", reject);
+  });
+}
 program.parse();

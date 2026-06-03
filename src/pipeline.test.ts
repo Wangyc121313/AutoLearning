@@ -25,7 +25,7 @@ vi.mock('./optimizer/index', () => ({
   optimizeTranscript: vi.fn().mockImplementation((text: string) => Promise.resolve(text)),
 }));
 
-import { runPipeline } from './pipeline';
+import { runPipeline, runPipelineFromText } from './pipeline';
 import { getGenerator } from './generator/index';
 import type { Config } from './config';
 
@@ -147,5 +147,21 @@ describe('runPipeline', () => {
 
     // Cleanup
     fs.rmSync(newDir, { recursive: true, force: true });
+  });
+});
+
+describe('runPipelineFromText', () => {
+  it('generates notes from raw text input', async () => {
+    const result = await runPipelineFromText(
+      'This is raw text content for testing. It has enough length to be meaningful for processing.',
+      'Test Title',
+      'stdin',
+      mockConfig,
+      { providerOverride: 'claude' },
+    );
+
+    expect(result.markdown).toBe('# Test Note\n\n## Summary\n\nGenerated test content.');
+    expect(result.filePath).toContain('Test-Title');
+    expect(fs.existsSync(result.filePath)).toBe(true);
   });
 });
