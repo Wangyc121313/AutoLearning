@@ -13,7 +13,7 @@ export class TextFetcher implements Fetcher {
     // Strategy 1: r.jina.ai proxy (handles anti-bot, returns clean Markdown)
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30_000);
+      const timeout = setTimeout(() => controller.abort(), 8_000);
 
       try {
         const response = await fetch(`${JINA_BASE}${encodeURIComponent(url)}`, {

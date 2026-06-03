@@ -88,7 +88,7 @@ var TextFetcher = class {
   async fetch(url) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3e4);
+      const timeout = setTimeout(() => controller.abort(), 8e3);
       try {
         const response = await fetch(`${JINA_BASE}${encodeURIComponent(url)}`, {
           signal: controller.signal,
