@@ -226,7 +226,12 @@ export class VideoFetcher implements Fetcher {
 
   private extractTitle(url: string): string {
     try {
-      const result = execFileSync('yt-dlp', ['--js-runtimes', 'node', '--get-title', url], {
+      const args: string[] = ['--js-runtimes', 'node', '--get-title'];
+      if (this.options.cookiesFromBrowser) {
+        args.push('--cookies-from-browser', this.options.cookiesFromBrowser);
+      }
+      args.push(url);
+      const result = execFileSync('yt-dlp', args, {
         encoding: 'utf-8',
         timeout: 10_000,
         stdio: 'pipe',

@@ -338,7 +338,12 @@ var VideoFetcher = class {
   }
   extractTitle(url) {
     try {
-      const result = execFileSync2("yt-dlp", ["--js-runtimes", "node", "--get-title", url], {
+      const args = ["--js-runtimes", "node", "--get-title"];
+      if (this.options.cookiesFromBrowser) {
+        args.push("--cookies-from-browser", this.options.cookiesFromBrowser);
+      }
+      args.push(url);
+      const result = execFileSync2("yt-dlp", args, {
         encoding: "utf-8",
         timeout: 1e4,
         stdio: "pipe"
