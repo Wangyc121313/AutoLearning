@@ -66,6 +66,16 @@ export class VideoFetcher implements Fetcher {
     };
   }
 
+  private wrap412(err: any): Error {
+    const msg = err?.stderr || err?.message || '';
+    if (msg.includes('412') && !this.options.cookiesFromBrowser) {
+      return new Error(
+        'Bilibili requires login. Try: --cookies-from-browser firefox'
+      );
+    }
+    return err instanceof Error ? err : new Error(String(err));
+  }
+
   private downloadAudio(url: string): string {
     const tmpDir = this.options.tmpDir ?? os.tmpdir();
     const uniqueId = Date.now().toString(36);
@@ -87,11 +97,15 @@ export class VideoFetcher implements Fetcher {
     }
     args.push(url);
 
-    execFileSync('yt-dlp', args, {
-      encoding: 'utf-8',
-      timeout: 120_000,
-      stdio: 'pipe',
-    });
+    try {
+      execFileSync('yt-dlp', args, {
+        encoding: 'utf-8',
+        timeout: 120_000,
+        stdio: 'pipe',
+      });
+    } catch (err: any) {
+      throw this.wrap412(err);
+    }
 
     // Find downloaded file
     const expectedFile = path.join(tmpDir, `audio_${uniqueId}.m4a`);

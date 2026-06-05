@@ -207,6 +207,15 @@ var VideoFetcher = class {
       rawText: transcript
     };
   }
+  wrap412(err) {
+    const msg = err?.stderr || err?.message || "";
+    if (msg.includes("412") && !this.options.cookiesFromBrowser) {
+      return new Error(
+        "Bilibili requires login. Try: --cookies-from-browser firefox"
+      );
+    }
+    return err instanceof Error ? err : new Error(String(err));
+  }
   downloadAudio(url) {
     const tmpDir = this.options.tmpDir ?? os2.tmpdir();
     const uniqueId = Date.now().toString(36);
@@ -231,11 +240,15 @@ var VideoFetcher = class {
       args.push("--cookies-from-browser", this.options.cookiesFromBrowser);
     }
     args.push(url);
-    execFileSync2("yt-dlp", args, {
-      encoding: "utf-8",
-      timeout: 12e4,
-      stdio: "pipe"
-    });
+    try {
+      execFileSync2("yt-dlp", args, {
+        encoding: "utf-8",
+        timeout: 12e4,
+        stdio: "pipe"
+      });
+    } catch (err) {
+      throw this.wrap412(err);
+    }
     const expectedFile = path2.join(tmpDir, `audio_${uniqueId}.m4a`);
     if (fs2.existsSync(expectedFile)) return expectedFile;
     for (const ext of ["webm", "mp3", "opus", "mp4"]) {

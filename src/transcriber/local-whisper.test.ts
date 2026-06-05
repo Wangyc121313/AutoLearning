@@ -18,7 +18,7 @@ describe('LocalWhisperTranscriber', () => {
     expect(execFileSync).toHaveBeenCalledWith(
       'python3',
       [expect.stringContaining('transcribe.py'), '/tmp/test-audio.m4a', 'base'],
-      expect.objectContaining({ encoding: 'utf-8', timeout: 600_000 }),
+      expect.objectContaining({ encoding: 'utf-8', timeout: 1_800_000 }),
     );
     expect(result).toBe(mockOutput);
   });
