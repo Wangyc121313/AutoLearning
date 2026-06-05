@@ -694,8 +694,9 @@ var LocalWhisperTranscriber = class {
   async transcribe(audioPath) {
     return execFileSync3(this.pythonPath, [SCRIPT_PATH, audioPath, this.config.modelSize], {
       encoding: "utf-8",
-      timeout: 6e5
+      timeout: 6e5,
       // 10 minutes max
+      env: { ...process.env, HF_HUB_OFFLINE: "1" }
     });
   }
 };
