@@ -22,7 +22,7 @@ export class LocalWhisperTranscriber implements Transcriber {
   async transcribe(audioPath: string): Promise<string> {
     return execFileSync(this.pythonPath, [SCRIPT_PATH, audioPath, this.config.modelSize], {
       encoding: 'utf-8',
-      timeout: 600_000, // 10 minutes max
+      timeout: 1_800_000, // 30 minutes max
       env: { ...process.env, HF_HUB_OFFLINE: '1' },
     });
   }
