@@ -88,6 +88,22 @@ import fs2 from "fs";
 import os2 from "os";
 import path2 from "path";
 var JINA_BASE = "https://r.jina.ai/";
+function isAuthWall(text) {
+  const lower = text.toLowerCase();
+  const markers = [
+    "please log in",
+    "please login",
+    "\u8BF7\u60A8\u767B\u5F55",
+    "\u8BF7\u767B\u5F55",
+    "captcha",
+    "\u5B89\u5168\u9A8C\u8BC1",
+    "precondition failed",
+    "access denied",
+    "enable javascript",
+    "please make sure you are authorized"
+  ];
+  return markers.some((m) => lower.includes(m));
+}
 var TextFetcher = class {
   constructor(options) {
     this.options = options;
@@ -132,6 +148,10 @@ var TextFetcher = class {
           resolve(null);
           return;
         }
+        if (isAuthWall(stdout)) {
+          resolve(null);
+          return;
+        }
         const title = this.extractTitleFromMarkdown(stdout) ?? url;
         resolve({ title, rawText: stdout.trim() });
       } catch (err) {
@@ -143,38 +163,53 @@ var TextFetcher = class {
     const cookieFile = await this.ensureCookies();
     if (!cookieFile) return null;
     console.error("Fetching with browser cookies...");
-    return new Promise((resolve, reject) => {
-      try {
-        const stdout = execFileSync("curl", [
-          "--silent",
-          "--max-time",
-          "15",
-          "-b",
-          cookieFile,
-          "-H",
-          "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-          "-H",
-          "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
-          "-L",
-          url
-        ], { encoding: "utf-8", timeout: 2e4, stdio: "pipe" });
-        if (!stdout || stdout.trim().length < 200) {
-          resolve(null);
-          return;
-        }
-        const titleMatch = stdout.match(/<title[^>]*>([^<]+)<\/title>/i);
-        const title = titleMatch?.[1]?.trim() ?? url;
-        resolve({ title, rawText: stdout.trim() });
-      } catch (err) {
-        reject(err);
+    let stdout;
+    try {
+      stdout = execFileSync("curl", [
+        "--silent",
+        "--max-time",
+        "15",
+        "-b",
+        cookieFile,
+        "-H",
+        "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "-H",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
+        "-L",
+        url
+      ], { encoding: "utf-8", timeout: 2e4, stdio: "pipe" });
+    } catch {
+      return null;
+    }
+    if (!stdout || stdout.trim().length < 500) return null;
+    const html = stdout;
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    let title = titleMatch?.[1]?.trim() ?? url;
+    title = title.replace(/\s*[-–|]\s*知乎\s*$/, "");
+    try {
+      const { JSDOM } = await import("jsdom");
+      const { Readability } = await import("@mozilla/readability");
+      const dom = new JSDOM(html, { url });
+      const reader = new Readability(dom.window.document);
+      const article = reader.parse();
+      if (article?.textContent && article.textContent.trim().length > 50) {
+        return { title, rawText: article.textContent.trim() };
       }
-    });
+    } catch {
+    }
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const bodyText = bodyMatch?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ?? "";
+    if (bodyText.length > 100) {
+      return { title, rawText: bodyText };
+    }
+    return null;
   }
   async ensureCookies() {
     if (this.cookieFile) return this.cookieFile;
     const browser = this.options?.cookiesFromBrowser;
     if (!browser) return null;
     const cookiePath = path2.join(os2.tmpdir(), `autolearn_cookies_${Date.now().toString(36)}.txt`);
+    fs2.writeFileSync(cookiePath, "# Netscape HTTP Cookie File\n");
     try {
       execFileSync("yt-dlp", [
         "--cookies-from-browser",
@@ -186,13 +221,12 @@ var TextFetcher = class {
         "https://www.bilibili.com"
       ], { encoding: "utf-8", timeout: 15e3, stdio: "pipe" });
     } catch {
+    }
+    if (!fs2.existsSync(cookiePath) || fs2.statSync(cookiePath).size < 500) {
       try {
         fs2.unlinkSync(cookiePath);
       } catch {
       }
-      return null;
-    }
-    if (!fs2.existsSync(cookiePath) || fs2.statSync(cookiePath).size === 0) {
       return null;
     }
     this.cookieFile = cookiePath;

@@ -7,6 +7,24 @@ import type { FetchResult } from '../types';
 
 const JINA_BASE = 'https://r.jina.ai/';
 
+/** Detect login walls, captcha pages, or blocked content from r.jina.ai output. */
+function isAuthWall(text: string): boolean {
+  const lower = text.toLowerCase();
+  const markers = [
+    'please log in',
+    'please login',
+    '请您登录',
+    '请登录',
+    'captcha',
+    '安全验证',
+    'precondition failed',
+    'access denied',
+    'enable javascript',
+    'please make sure you are authorized',
+  ];
+  return markers.some((m) => lower.includes(m));
+}
+
 export class TextFetcher implements Fetcher {
   private cookieFile: string | null = null;
 
@@ -58,6 +76,12 @@ export class TextFetcher implements Fetcher {
           return;
         }
 
+        // Detect login walls / captcha pages from r.jina.ai
+        if (isAuthWall(stdout)) {
+          resolve(null);
+          return;
+        }
+
         const title = this.extractTitleFromMarkdown(stdout) ?? url;
         resolve({ title, rawText: stdout.trim() });
       } catch (err) {
@@ -72,31 +96,48 @@ export class TextFetcher implements Fetcher {
 
     console.error('Fetching with browser cookies...');
 
-    return new Promise((resolve, reject) => {
-      try {
-        const stdout = execFileSync('curl', [
-          '--silent', '--max-time', '15',
-          '-b', cookieFile,
-          '-H', 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          '-H', 'Accept-Language: zh-CN,zh;q=0.9,en;q=0.8',
-          '-L',
-          url,
-        ], { encoding: 'utf-8', timeout: 20_000, stdio: 'pipe' });
+    let stdout: string;
+    try {
+      stdout = execFileSync('curl', [
+        '--silent', '--max-time', '15',
+        '-b', cookieFile,
+        '-H', 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        '-H', 'Accept-Language: zh-CN,zh;q=0.9,en;q=0.8',
+        '-L',
+        url,
+      ], { encoding: 'utf-8', timeout: 20_000, stdio: 'pipe' });
+    } catch {
+      return null;
+    }
 
-        if (!stdout || stdout.trim().length < 200) {
-          resolve(null);
-          return;
-        }
+    if (!stdout || stdout.trim().length < 500) return null;
 
-        // Simple title extraction from HTML
-        const titleMatch = stdout.match(/<title[^>]*>([^<]+)<\/title>/i);
-        const title = titleMatch?.[1]?.trim() ?? url;
+    const html = stdout;
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    let title = titleMatch?.[1]?.trim() ?? url;
+    title = title.replace(/\s*[-–|]\s*知乎\s*$/, '');
 
-        resolve({ title, rawText: stdout.trim() });
-      } catch (err) {
-        reject(err);
+    // Extract content with Readability
+    try {
+      const { JSDOM } = await import('jsdom');
+      const { Readability } = await import('@mozilla/readability');
+      const dom = new JSDOM(html, { url });
+      const reader = new Readability(dom.window.document);
+      const article = reader.parse();
+      if (article?.textContent && article.textContent.trim().length > 50) {
+        return { title, rawText: article.textContent.trim() };
       }
-    });
+    } catch {
+      // Fall through to body text extraction
+    }
+
+    // Last resort: body text
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const bodyText = bodyMatch?.[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() ?? '';
+    if (bodyText.length > 100) {
+      return { title, rawText: bodyText };
+    }
+    return null;
   }
 
   private async ensureCookies(): Promise<string | null> {
@@ -107,6 +148,9 @@ export class TextFetcher implements Fetcher {
 
     const cookiePath = path.join(os.tmpdir(), `autolearn_cookies_${Date.now().toString(36)}.txt`);
 
+    // Pre-create file with Netscape header (yt-dlp requires this)
+    fs.writeFileSync(cookiePath, '# Netscape HTTP Cookie File\n');
+
     try {
       execFileSync('yt-dlp', [
         '--cookies-from-browser', browser,
@@ -116,12 +160,12 @@ export class TextFetcher implements Fetcher {
         'https://www.bilibili.com',
       ], { encoding: 'utf-8', timeout: 15_000, stdio: 'pipe' });
     } catch {
-      // Cookie export may fail if yt-dlp can't read the browser profile
-      try { fs.unlinkSync(cookiePath); } catch { /* ignore */ }
-      return null;
+      // yt-dlp may exit non-zero even if cookies were written successfully.
+      // Only fail if the file is actually empty.
     }
 
-    if (!fs.existsSync(cookiePath) || fs.statSync(cookiePath).size === 0) {
+    if (!fs.existsSync(cookiePath) || fs.statSync(cookiePath).size < 500) {
+      try { fs.unlinkSync(cookiePath); } catch { /* ignore */ }
       return null;
     }
 
