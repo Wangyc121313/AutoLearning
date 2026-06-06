@@ -4,76 +4,72 @@
 
 从 URL 或本地文件自动生成结构化 Markdown 学习笔记的 CLI 工具。
 
-**文本**：r.jina.ai 代理抓取 + Readability 降级，反爬网站支持 `--stdin` / `--file` 手动输入。
-
-**视频**：字幕优先（秒级）→ 本地 Faster-Whisper 兜底（分钟级），自动转录优化与去重。
-
-**输出**：TL;DR 开篇 → 灵活分段（表格/引用/代码块自适应）→ 关键洞察收尾，自动过滤 AI 客套话。
-
-## 安装
+## 快速开始
 
 ```bash
-pnpm install
-pnpm build
+pnpm install && pnpm build
+pnpm link --global          # 注册 autolearn 全局命令
 
-# 注册全局命令
-pnpm link --global
+# 立刻试用
+autolearn https://nodejs.org/en/about
+autolearn -t video https://www.youtube.com/watch?v=xxx
 ```
-
-> 全局命令需要 `pnpm setup` 并将 `PNPM_HOME` 加入 PATH。
 
 ### 前置依赖
 
-| 工具 | 用途 | 何时需要 | 安装 |
-|------|------|----------|------|
-| yt-dlp | 视频下载/字幕提取 | 视频输入 | `pip install yt-dlp` |
-| FFmpeg | 音频提取与转码 | 视频输入 | `sudo apt install ffmpeg` |
-| Python 3.10+ | 运行 Whisper 脚本 | 视频无字幕时 | `apt install python3` |
-| faster-whisper | 本地语音转录 | 视频无字幕时 | `uv pip install faster-whisper` |
+| 工具 | 何时需要 | 安装 |
+|------|----------|------|
+| yt-dlp + FFmpeg | 视频输入 | `pip install yt-dlp` / `apt install ffmpeg` |
+| Python 3.10+ + faster-whisper | 视频无字幕时 | `uv pip install faster-whisper` |
+| pandoc | `--format pdf` 导出 | `apt install pandoc` |
 
-文本/博客输入无需额外依赖。
+文本/博客输入零额外依赖。
 
 ## 使用
 
 ### 文本（文档、博客、专栏）
 
 ```bash
-# 普通网站
-autolearn https://nodejs.org/en/about
-
-# 需要反爬的网站（自动走 r.jina.ai 代理）
-autolearn https://www.bilibili.com/opus/1042547317663596551
-
-# 强反爬网站（浏览器复制 → 命令行输入）
-pbpaste | autolearn --stdin --title "文章标题"
-autolearn --file article.md
+autolearn https://nodejs.org/en/about                    # 普通网站（r.jina.ai 代理）
+autolearn https://www.bilibili.com/opus/1042547317663596551  # Bilibili 专栏
+autolearn --cookies-from-browser firefox "https://zhuanlan.zhihu.com/p/xxx"  # 知乎（需登录）
+pbpaste | autolearn --stdin --title "标题"                # 手动输入
+autolearn --file article.md                               # 本地文件
 ```
 
 ### 视频（YouTube、Bilibili）
 
 ```bash
-# YouTube（通常有字幕，秒级完成）
 autolearn -t video https://www.youtube.com/watch?v=xxx
-
-# Bilibili（需浏览器登录态）
-autolearn -t video --cookies-from-browser firefox https://www.bilibili.com/video/BVxxx
-
-# 自动检测类型
-autolearn https://www.youtube.com/watch?v=xxx
+autolearn -t video --cookies-from-browser firefox "https://www.bilibili.com/video/BVxxx"
+autolearn https://www.youtube.com/watch?v=xxx             # auto 类型自动识别
 ```
 
-### 其他选项
+### 通用选项
 
 ```bash
-# 指定 AI 提供商
-autolearn -p claude https://example.com/article
-
-# 指定输出目录
-autolearn -o ./my-notes https://example.com/article
-
-# 查看完整帮助
-autolearn --help
+autolearn -p claude URL                # 指定 AI 提供商
+autolearn -o ./my-notes URL            # 指定输出目录
+autolearn --format pdf URL             # 导出 PDF
+autolearn --force URL                  # 强制重新处理
+autolearn --help                       # 完整帮助
 ```
+
+## 工作原理
+
+```
+     ┌─ 文本 ─→ r.jina.ai → cookie curl → Readability ──┐
+URL ─┤                                                   ├─→ Optimizer → Generator → sanitize → Output
+     └─ 视频 ─→ 字幕提取 → Whisper 转录(降级) ──────────┘
+```
+
+**文本三级抓取**：r.jina.ai 代理（主）→ 浏览器 cookie curl（登录站点）→ Node.js Readability（兜底），自动检测登录墙并降级。
+
+**视频双路径**：优先提取内嵌字幕（秒级），无字幕时下载音频用本地 Faster-Whisper 转录（分钟级），含 VTT 滚动去重。
+
+**内容优化**：所有文本经 LLM 清洗（去时间戳、纠错、去网页噪音、智能分段），再生成笔记。
+
+**笔记风格**：TL;DR 开篇 → 段落/表格/引用自适应排版 → 关键洞察收尾，自动过滤 AI 客套话，末尾附源链接。
 
 ## 配置
 
@@ -83,7 +79,6 @@ autolearn --help
 [provider]
 default = "deepseek"
 
-# AI 提供商（支持任意 OpenAI 兼容接口）
 [providers.deepseek]
 api_key = "${DEEPSEEK_API_KEY}"
 model = "deepseek-chat"
@@ -105,32 +100,25 @@ model = "llama3"
 directory = "./notes"
 filename_template = "{title}-{date}.md"
 
-# 本地 Whisper（视频无字幕时自动启用）
 [local_whisper]
 python_path = "/path/to/venv/bin/python3"
-model_size = "base"        # tiny | base | small | medium | large
+model_size = "base"          # tiny | base | small | medium | large
 ```
 
-`${VAR}` 格式自动展开为环境变量。
+`${VAR}` 自动展开为环境变量。
 
 ## 架构
 
-```
-                 ┌─ 文本 ─→ r.jina.ai(主) → Readability(降级) ─┐
-CLI → Fetcher ──┤                                              ├─→ Optimizer → Parser → Generator → sanitize → Output
-                 └─ 视频 ─→ 字幕提取(主) → Whisper转录(降级) ──┘
-```
-
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| CLI | `src/cli.ts` | 命令行解析，支持 URL/文件/stdin 三种输入 |
+| CLI | `src/cli.ts` | URL / `--file` / `--stdin` 三种输入，`--format pdf` 导出，`--force` 重跑，URL 历史去重 |
 | Config | `src/config.ts` | TOML 配置 + `${ENV}` 展开 |
-| Fetcher | `src/fetcher/` | TextFetcher（r.jina.ai/curl → Readability 降级）+ VideoFetcher（字幕 → Whisper 双路径），含 VTT 去重 |
+| Fetcher | `src/fetcher/` | TextFetcher（r.jina.ai → cookie curl → Readability 三级降级）+ VideoFetcher（字幕 → Whisper 双路径，VTT 去重） |
 | Optimizer | `src/optimizer/` | LLM 清洗（去时间戳、纠错、去网页噪音、智能分段） |
 | Parser | `src/parser/` | HTML 清洗、文本规范化 |
-| Generator | `src/generator/` | LLM 生成笔记（Claude/OpenAI/DeepSeek/Ollama），含自适应排版 prompt |
+| Generator | `src/generator/` | LLM 生成笔记（DeepSeek / Claude / OpenAI / Ollama），自适应排版 prompt |
 | Transcriber | `src/transcriber/` | 语音转文字（本地 Faster-Whisper / OpenAI Whisper API / 阿里云） |
-| Output | `src/output/` | Markdown 写入 + LLM 客套话过滤 |
+| Output | `src/output/` | Markdown/PDF 写入 + AI 客套话过滤 |
 
 ## 开发
 
