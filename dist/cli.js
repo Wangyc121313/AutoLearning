@@ -2,8 +2,9 @@
 
 // src/cli.ts
 import { Command } from "commander";
-import fs6 from "fs";
-import path5 from "path";
+import fs7 from "fs";
+import os4 from "os";
+import path6 from "path";
 
 // src/config.ts
 import fs from "fs";
@@ -79,12 +80,20 @@ function loadConfig(configPath) {
 }
 
 // src/pipeline.ts
-import fs5 from "fs";
+import fs6 from "fs";
 
 // src/fetcher/text-fetcher.ts
 import { execFileSync } from "child_process";
+import fs2 from "fs";
+import os2 from "os";
+import path2 from "path";
 var JINA_BASE = "https://r.jina.ai/";
 var TextFetcher = class {
+  constructor(options) {
+    this.options = options;
+  }
+  options;
+  cookieFile = null;
   supports(_url) {
     return true;
   }
@@ -94,7 +103,14 @@ var TextFetcher = class {
       if (result) return result;
     } catch {
     }
-    console.error("r.jina.ai failed, trying direct fetch...");
+    if (this.options?.cookiesFromBrowser) {
+      try {
+        const result = await this.fetchWithCookies(url);
+        if (result) return result;
+      } catch {
+      }
+    }
+    console.error("r.jina.ai and cookie fetch failed, trying direct fetch...");
     return this.directFetch(url);
   }
   async fetchViaJina(url) {
@@ -122,6 +138,74 @@ var TextFetcher = class {
         reject(err);
       }
     });
+  }
+  async fetchWithCookies(url) {
+    const cookieFile = await this.ensureCookies();
+    if (!cookieFile) return null;
+    console.error("Fetching with browser cookies...");
+    return new Promise((resolve, reject) => {
+      try {
+        const stdout = execFileSync("curl", [
+          "--silent",
+          "--max-time",
+          "15",
+          "-b",
+          cookieFile,
+          "-H",
+          "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "-H",
+          "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
+          "-L",
+          url
+        ], { encoding: "utf-8", timeout: 2e4, stdio: "pipe" });
+        if (!stdout || stdout.trim().length < 200) {
+          resolve(null);
+          return;
+        }
+        const titleMatch = stdout.match(/<title[^>]*>([^<]+)<\/title>/i);
+        const title = titleMatch?.[1]?.trim() ?? url;
+        resolve({ title, rawText: stdout.trim() });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+  async ensureCookies() {
+    if (this.cookieFile) return this.cookieFile;
+    const browser = this.options?.cookiesFromBrowser;
+    if (!browser) return null;
+    const cookiePath = path2.join(os2.tmpdir(), `autolearn_cookies_${Date.now().toString(36)}.txt`);
+    try {
+      execFileSync("yt-dlp", [
+        "--cookies-from-browser",
+        browser,
+        "--cookies",
+        cookiePath,
+        "--skip-download",
+        "--no-playlist",
+        "https://www.bilibili.com"
+      ], { encoding: "utf-8", timeout: 15e3, stdio: "pipe" });
+    } catch {
+      try {
+        fs2.unlinkSync(cookiePath);
+      } catch {
+      }
+      return null;
+    }
+    if (!fs2.existsSync(cookiePath) || fs2.statSync(cookiePath).size === 0) {
+      return null;
+    }
+    this.cookieFile = cookiePath;
+    return cookiePath;
+  }
+  /** Clean up temp cookie file */
+  destroy() {
+    if (this.cookieFile) {
+      try {
+        fs2.unlinkSync(this.cookieFile);
+      } catch {
+      }
+    }
   }
   async directFetch(url) {
     const controller = new AbortController();
@@ -163,9 +247,9 @@ var TextFetcher = class {
 
 // src/fetcher/video-fetcher.ts
 import { execFileSync as execFileSync2 } from "child_process";
-import fs2 from "fs";
-import os2 from "os";
-import path2 from "path";
+import fs3 from "fs";
+import os3 from "os";
+import path3 from "path";
 var VIDEO_URL_PATTERNS = [
   /youtube\.com\/watch\?v=/,
   /youtu\.be\//,
@@ -199,7 +283,7 @@ var VideoFetcher = class {
     console.error("Transcribing audio...");
     const transcript = await this.options.transcriberInstance.transcribe(audioPath);
     try {
-      if (fs2.existsSync(audioPath)) fs2.unlinkSync(audioPath);
+      if (fs3.existsSync(audioPath)) fs3.unlinkSync(audioPath);
     } catch {
     }
     return {
@@ -217,9 +301,9 @@ var VideoFetcher = class {
     return err instanceof Error ? err : new Error(String(err));
   }
   downloadAudio(url) {
-    const tmpDir = this.options.tmpDir ?? os2.tmpdir();
+    const tmpDir = this.options.tmpDir ?? os3.tmpdir();
     const uniqueId = Date.now().toString(36);
-    const outputTemplate = path2.join(tmpDir, `audio_${uniqueId}.%(ext)s`);
+    const outputTemplate = path3.join(tmpDir, `audio_${uniqueId}.%(ext)s`);
     const args = [
       "--js-runtimes",
       "node",
@@ -249,23 +333,23 @@ var VideoFetcher = class {
     } catch (err) {
       throw this.wrap412(err);
     }
-    const expectedFile = path2.join(tmpDir, `audio_${uniqueId}.m4a`);
-    if (fs2.existsSync(expectedFile)) return expectedFile;
+    const expectedFile = path3.join(tmpDir, `audio_${uniqueId}.m4a`);
+    if (fs3.existsSync(expectedFile)) return expectedFile;
     for (const ext of ["webm", "mp3", "opus", "mp4"]) {
-      const alt = path2.join(tmpDir, `audio_${uniqueId}.${ext}`);
-      if (fs2.existsSync(alt)) return alt;
+      const alt = path3.join(tmpDir, `audio_${uniqueId}.${ext}`);
+      if (fs3.existsSync(alt)) return alt;
     }
     throw new Error("Audio download failed: no output file found");
   }
   extractSubtitles(url) {
     const videoId = Date.now().toString(36);
-    const tmpDir = this.options.tmpDir ?? os2.tmpdir();
+    const tmpDir = this.options.tmpDir ?? os3.tmpdir();
     const candidates = [
-      path2.join(tmpDir, `${videoId}.zh-Hans.vtt`),
-      path2.join(tmpDir, `${videoId}.zh-CN.vtt`),
-      path2.join(tmpDir, `${videoId}.zh.vtt`),
-      path2.join(tmpDir, `${videoId}.zh-TW.vtt`),
-      path2.join(tmpDir, `${videoId}.en.vtt`)
+      path3.join(tmpDir, `${videoId}.zh-Hans.vtt`),
+      path3.join(tmpDir, `${videoId}.zh-CN.vtt`),
+      path3.join(tmpDir, `${videoId}.zh.vtt`),
+      path3.join(tmpDir, `${videoId}.zh-TW.vtt`),
+      path3.join(tmpDir, `${videoId}.en.vtt`)
     ];
     try {
       try {
@@ -280,7 +364,7 @@ var VideoFetcher = class {
           "--convert-subs",
           "vtt",
           "--output",
-          path2.join(tmpDir, `${videoId}.%(ext)s`)
+          path3.join(tmpDir, `${videoId}.%(ext)s`)
         ];
         if (this.options.cookiesFromBrowser) {
           args.push("--cookies-from-browser", this.options.cookiesFromBrowser);
@@ -295,18 +379,18 @@ var VideoFetcher = class {
       }
       let subFile = null;
       for (const c of candidates) {
-        if (fs2.existsSync(c)) {
+        if (fs3.existsSync(c)) {
           subFile = c;
           break;
         }
       }
       if (!subFile) throw new Error("No subtitle file found");
-      const content = fs2.readFileSync(subFile, "utf-8");
+      const content = fs3.readFileSync(subFile, "utf-8");
       return this.parseVTT(content);
     } finally {
       for (const c of candidates) {
         try {
-          if (fs2.existsSync(c)) fs2.unlinkSync(c);
+          if (fs3.existsSync(c)) fs3.unlinkSync(c);
         } catch {
         }
       }
@@ -370,17 +454,16 @@ var VideoFetcher = class {
 };
 
 // src/fetcher/index.ts
-var textFetcher = new TextFetcher();
 function getFetcher(url, type, videoOptions, transcriberInstance) {
   const fullOptions = {
     ...videoOptions ?? { transcriber: "whisper" },
     transcriberInstance
   };
   if (type === "video") return new VideoFetcher(fullOptions);
-  if (type === "text") return textFetcher;
+  if (type === "text") return new TextFetcher({ cookiesFromBrowser: videoOptions?.cookiesFromBrowser });
   const vf = new VideoFetcher(fullOptions);
   if (vf.supports(url)) return vf;
-  return textFetcher;
+  return new TextFetcher({ cookiesFromBrowser: videoOptions?.cookiesFromBrowser });
 }
 
 // src/generator/claude.ts
@@ -632,15 +715,15 @@ function parseContent(fetched, sourceUrl, type) {
 }
 
 // src/output/index.ts
-import fs3 from "fs";
-import path3 from "path";
+import fs4 from "fs";
+import path4 from "path";
 var DATE_RE = /\{date\}/g;
 var TITLE_RE = /\{title\}/g;
 function sanitizeFilename(name) {
   return name.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 200);
 }
 function writeNote(markdown, title, directory, filenameTemplate) {
-  if (!fs3.existsSync(directory)) {
+  if (!fs4.existsSync(directory)) {
     throw new Error(`Output directory does not exist: ${directory}`);
   }
   const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -649,8 +732,8 @@ function writeNote(markdown, title, directory, filenameTemplate) {
   if (!filename.endsWith(".md")) {
     filename += ".md";
   }
-  const filePath = path3.join(directory, filename);
-  fs3.writeFileSync(filePath, markdown, "utf-8");
+  const filePath = path4.join(directory, filename);
+  fs4.writeFileSync(filePath, markdown, "utf-8");
   return { markdown, filePath };
 }
 
@@ -688,15 +771,15 @@ function sanitize(text) {
 
 // src/transcriber/local-whisper.ts
 import { execFileSync as execFileSync3 } from "child_process";
-import fs4 from "fs";
-import path4 from "path";
+import fs5 from "fs";
+import path5 from "path";
 import { fileURLToPath } from "url";
-var __dirname = path4.dirname(fileURLToPath(import.meta.url));
+var __dirname = path5.dirname(fileURLToPath(import.meta.url));
 var SCRIPT_PATH = [
-  path4.resolve(__dirname, "scripts", "transcribe.py"),
-  path4.resolve(__dirname, "..", "scripts", "transcribe.py"),
-  path4.resolve(__dirname, "..", "..", "scripts", "transcribe.py")
-].find((p) => fs4.existsSync(p)) ?? path4.resolve(__dirname, "..", "scripts", "transcribe.py");
+  path5.resolve(__dirname, "scripts", "transcribe.py"),
+  path5.resolve(__dirname, "..", "scripts", "transcribe.py"),
+  path5.resolve(__dirname, "..", "..", "scripts", "transcribe.py")
+].find((p) => fs5.existsSync(p)) ?? path5.resolve(__dirname, "..", "scripts", "transcribe.py");
 var LocalWhisperTranscriber = class {
   constructor(config) {
     this.config = config;
@@ -771,8 +854,8 @@ async function runPipelineFromText(text, title, sourceLabel, config, options) {
   const generator = getGenerator(provider, config.providers);
   const markdown = sanitize(await generator.generate(content));
   const outDir = config.output.directory;
-  if (!fs5.existsSync(outDir)) {
-    fs5.mkdirSync(outDir, { recursive: true });
+  if (!fs6.existsSync(outDir)) {
+    fs6.mkdirSync(outDir, { recursive: true });
   }
   const result = writeNote(markdown, content.title, outDir, config.output.filenameTemplate);
   console.error(`Note written to ${result.filePath}`);
@@ -810,22 +893,61 @@ async function runPipeline(url, type, config, options) {
   const generator = getGenerator(provider, config.providers);
   const markdown = sanitize(await generator.generate(content));
   const outDir = config.output.directory;
-  if (!fs5.existsSync(outDir)) {
-    fs5.mkdirSync(outDir, { recursive: true });
+  if (!fs6.existsSync(outDir)) {
+    fs6.mkdirSync(outDir, { recursive: true });
   }
   const result = writeNote(markdown, content.title, outDir, config.output.filenameTemplate);
   console.error(`Note written to ${result.filePath}`);
   return result;
 }
 
+// src/output/convert.ts
+import { execFileSync as execFileSync4 } from "child_process";
+function convertToPdf(mdPath, pdfPath) {
+  try {
+    execFileSync4("pandoc", [
+      mdPath,
+      "-o",
+      pdfPath,
+      "--pdf-engine=xelatex",
+      "-V",
+      "mainfont=DejaVu Serif",
+      "-V",
+      "monofont=DejaVu Sans Mono",
+      "--from=markdown"
+    ], { encoding: "utf-8", timeout: 3e4, stdio: "pipe" });
+    return;
+  } catch {
+  }
+  throw new Error(
+    "PDF conversion requires pandoc. Install: sudo apt install pandoc texlive-xetex"
+  );
+}
+
 // src/cli.ts
+var HISTORY_FILE = path6.join(os4.homedir(), ".autolearning", "history.json");
+function loadHistory() {
+  try {
+    if (fs7.existsSync(HISTORY_FILE)) {
+      return JSON.parse(fs7.readFileSync(HISTORY_FILE, "utf-8"));
+    }
+  } catch {
+  }
+  return {};
+}
+function saveHistory(history) {
+  const dir = path6.dirname(HISTORY_FILE);
+  if (!fs7.existsSync(dir)) fs7.mkdirSync(dir, { recursive: true });
+  fs7.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2), "utf-8");
+}
 var program = new Command();
-program.name("autolearn").description("Generate structured Markdown study notes from URLs or local files").argument("[url]", "URL of the resource to learn from (optional if using --file or --stdin)").option("-p, --provider <name>", "AI provider").option("-o, --output <dir>", "Output directory for notes").option("-t, --type <type>", "Resource type: text, video, or auto", "auto").option("-c, --config <path>", "Path to config file").option("-v, --verbose", "Enable verbose logging").option("--cookies-from-browser <browser>", "Pass browser cookies to yt-dlp (e.g. firefox, chrome)").option("--file <path>", "Read content from a local file (.md, .txt, etc.)").option("--stdin", "Read content from standard input").option("--title <title>", "Title for the notes (used with --file or --stdin)").action(async (url, options) => {
+program.name("autolearn").description("Generate structured Markdown study notes from URLs or local files").argument("[url]", "URL of the resource to learn from (optional if using --file or --stdin)").option("-p, --provider <name>", "AI provider").option("-o, --output <dir>", "Output directory for notes").option("-t, --type <type>", "Resource type: text, video, or auto", "auto").option("-c, --config <path>", "Path to config file").option("-v, --verbose", "Enable verbose logging").option("--cookies-from-browser <browser>", "Browser cookies for sites that require login (e.g. firefox, chrome)").option("--file <path>", "Read content from a local file (.md, .txt, etc.)").option("--stdin", "Read content from standard input").option("--title <title>", "Title for the notes (used with --file or --stdin)").option("--format <fmt>", "Output format: md or pdf", "md").option("--force", "Force re-processing even if URL was already processed").action(async (url, options) => {
   try {
     const config = loadConfig(options.config);
     if (options.output) {
       config.output.directory = options.output;
     }
+    const history = loadHistory();
     if (options.file || options.stdin) {
       let text;
       let title;
@@ -835,12 +957,12 @@ program.name("autolearn").description("Generate structured Markdown study notes 
         title = options.title ?? "User Input";
         sourceLabel = "stdin";
       } else {
-        const filePath = path5.resolve(options.file);
-        if (!fs6.existsSync(filePath)) {
+        const filePath = path6.resolve(options.file);
+        if (!fs7.existsSync(filePath)) {
           throw new Error(`File not found: ${filePath}`);
         }
-        text = fs6.readFileSync(filePath, "utf-8");
-        title = options.title ?? path5.basename(filePath, path5.extname(filePath));
+        text = fs7.readFileSync(filePath, "utf-8");
+        title = options.title ?? path6.basename(filePath, path6.extname(filePath));
         sourceLabel = `file:${filePath}`;
       }
       if (!text.trim()) {
@@ -849,15 +971,20 @@ program.name("autolearn").description("Generate structured Markdown study notes 
       const result2 = await runPipelineFromText(text, title, sourceLabel, config, {
         providerOverride: options.provider
       });
-      console.log(`
-Done! Note saved to: ${result2.filePath}`);
+      await handleOutput(result2, options);
       return;
     }
     if (!url) {
       throw new Error("Please provide a URL, or use --file or --stdin");
     }
+    const cleanUrl = url.trim();
+    if (history[cleanUrl] && !options.force) {
+      console.error(`Already processed on ${history[cleanUrl].date}: ${history[cleanUrl].file}`);
+      console.error("Use --force to re-process.");
+      return;
+    }
     const result = await runPipeline(
-      url,
+      cleanUrl,
       options.type,
       config,
       {
@@ -865,8 +992,9 @@ Done! Note saved to: ${result2.filePath}`);
         cookiesFromBrowser: options.cookiesFromBrowser
       }
     );
-    console.log(`
-Done! Note saved to: ${result.filePath}`);
+    history[cleanUrl] = { date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), file: result.filePath };
+    saveHistory(history);
+    await handleOutput(result, options);
   } catch (error) {
     console.error(`Error: ${error.message}`);
     if (options.verbose && error instanceof Error) {
@@ -875,6 +1003,19 @@ Done! Note saved to: ${result.filePath}`);
     process.exit(1);
   }
 });
+async function handleOutput(result, options) {
+  const fmt = options.format === "pdf" ? "pdf" : "md";
+  if (fmt === "pdf") {
+    const pdfPath = result.filePath.replace(/\.md$/, ".pdf");
+    console.error("Converting to PDF...");
+    convertToPdf(result.filePath, pdfPath);
+    console.log(`
+Done! Note saved to: ${pdfPath}`);
+  } else {
+    console.log(`
+Done! Note saved to: ${result.filePath}`);
+  }
+}
 function readStdin() {
   return new Promise((resolve, reject) => {
     const chunks = [];

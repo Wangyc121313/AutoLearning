@@ -14,8 +14,6 @@ import { TextFetcher } from './text-fetcher';
 import { VideoFetcher } from './video-fetcher';
 import type { VideoFetcherOptions } from './video-fetcher';
 
-const textFetcher = new TextFetcher();
-
 export function getFetcher(
   url: string,
   type: 'text' | 'video' | 'auto',
@@ -27,10 +25,10 @@ export function getFetcher(
     transcriberInstance,
   };
   if (type === 'video') return new VideoFetcher(fullOptions);
-  if (type === 'text') return textFetcher;
+  if (type === 'text') return new TextFetcher({ cookiesFromBrowser: videoOptions?.cookiesFromBrowser });
 
   // auto-detect: try VideoFetcher first for video URLs, fall back to TextFetcher
   const vf = new VideoFetcher(fullOptions);
   if (vf.supports(url)) return vf;
-  return textFetcher;
+  return new TextFetcher({ cookiesFromBrowser: videoOptions?.cookiesFromBrowser });
 }
