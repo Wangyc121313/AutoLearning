@@ -26,7 +26,7 @@ const SYSTEM_PROMPT = `You are an expert study note writer. Given the content of
 - Section count: typically 3-6 ## sections. Don't over-fragment
 - End with source link on its own line
 
-**Key Takeaways (the most important section):**
+**关键洞察 / Key Takeaways (the most important section, use the same language as the content):**
 - Write 3-5 genuine insights, not a re-list of earlier points
 - Each takeaway should answer: "What does this mean? Why should I care?"
 - Format: numbered list with bold insight followed by one explanatory sentence
