@@ -44,3 +44,62 @@ export async function optimizeTranscript(
 
   return text.trim();
 }
+
+const GENERIC_TITLE_PATTERNS = [
+  /^来看看/i,
+  /^Chat\b/i,
+  /^(New Chat|Untitled|No Title)$/i,
+  /^https?:\/\//i,
+  /^.{1,5}$/,
+  /^Untitled/i,
+  /^未命名/i,
+  /^无标题/i,
+];
+
+function isGenericTitle(title: string): boolean {
+  if (!title || title.length < 2) return true;
+  return GENERIC_TITLE_PATTERNS.some((p) => p.test(title));
+}
+
+export async function fixTitle(
+  text: string,
+  currentTitle: string,
+  config: ProviderConfig,
+): Promise<string> {
+  if (!isGenericTitle(currentTitle)) return currentTitle;
+
+  // Use first ~1000 chars of content for context
+  const snippet = text.slice(0, 1000);
+
+  const client = new OpenAI({
+    apiKey: config.apiKey ?? '',
+    ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
+  });
+
+  try {
+    const response = await client.chat.completions.create({
+      model: config.model,
+      max_tokens: 50,
+      temperature: 0.2,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a title writer. Given content snippet, output ONLY a concise, descriptive title (max 15 words) in the same language as the content. No quotes, no Markdown, no explanation.',
+        },
+        {
+          role: 'user',
+          content: `Content:\n${snippet}\n\nGenerate a title:`,
+        },
+      ],
+    });
+
+    const generated = response.choices[0]?.message?.content?.trim();
+    if (generated && generated.length > 2 && generated.length < 100) {
+      return generated.replace(/^["'《]|["'》]$/g, '');
+    }
+  } catch {
+    // If title generation fails, keep the original
+  }
+
+  return currentTitle;
+}

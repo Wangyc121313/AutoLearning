@@ -5,7 +5,7 @@ import { parseContent } from './parser/index';
 import { writeNote } from './output/index';
 import { sanitize } from './output/sanitize';
 import { LocalWhisperTranscriber } from './transcriber/local-whisper';
-import { optimizeTranscript } from './optimizer/index';
+import { optimizeTranscript, fixTitle } from './optimizer/index';
 import type { Config } from './config';
 import type { NoteOutput } from './types';
 
@@ -26,6 +26,12 @@ export async function runPipelineFromText(
     console.error('Optimizing content...');
     try {
       raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+
+      const fixedTitle = await fixTitle(raw.rawText, raw.title, providerConfig);
+      if (fixedTitle !== raw.title) {
+        console.error(`Title updated: "${raw.title}" → "${fixedTitle}"`);
+        raw.title = fixedTitle;
+      }
     } catch (err) {
       console.error('Optimization failed, using raw text:', (err as Error).message);
     }
@@ -83,6 +89,13 @@ export async function runPipeline(
       console.error('Optimizing transcript...');
       try {
         raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+
+        // Fix generic titles (e.g. "来看看这段对话" from ChatGPT shared pages)
+        const fixedTitle = await fixTitle(raw.rawText, raw.title, providerConfig);
+        if (fixedTitle !== raw.title) {
+          console.error(`Title updated: "${raw.title}" → "${fixedTitle}"`);
+          raw.title = fixedTitle;
+        }
       } catch (err) {
         console.error('Transcript optimization failed, using raw text:', (err as Error).message);
       }

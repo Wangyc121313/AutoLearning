@@ -869,6 +869,54 @@ ${rawText}` }
   if (!text) throw new Error("Empty response from optimizer LLM");
   return text.trim();
 }
+var GENERIC_TITLE_PATTERNS = [
+  /^来看看/i,
+  /^Chat\b/i,
+  /^(New Chat|Untitled|No Title)$/i,
+  /^https?:\/\//i,
+  /^.{1,5}$/,
+  /^Untitled/i,
+  /^未命名/i,
+  /^无标题/i
+];
+function isGenericTitle(title) {
+  if (!title || title.length < 2) return true;
+  return GENERIC_TITLE_PATTERNS.some((p) => p.test(title));
+}
+async function fixTitle(text, currentTitle, config) {
+  if (!isGenericTitle(currentTitle)) return currentTitle;
+  const snippet = text.slice(0, 1e3);
+  const client = new OpenAI2({
+    apiKey: config.apiKey ?? "",
+    ...config.baseUrl ? { baseURL: config.baseUrl } : {}
+  });
+  try {
+    const response = await client.chat.completions.create({
+      model: config.model,
+      max_tokens: 50,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content: "You are a title writer. Given content snippet, output ONLY a concise, descriptive title (max 15 words) in the same language as the content. No quotes, no Markdown, no explanation."
+        },
+        {
+          role: "user",
+          content: `Content:
+${snippet}
+
+Generate a title:`
+        }
+      ]
+    });
+    const generated = response.choices[0]?.message?.content?.trim();
+    if (generated && generated.length > 2 && generated.length < 100) {
+      return generated.replace(/^["'《]|["'》]$/g, "");
+    }
+  } catch {
+  }
+  return currentTitle;
+}
 
 // src/pipeline.ts
 async function runPipelineFromText(text, title, sourceLabel, config, options) {
@@ -879,6 +927,11 @@ async function runPipelineFromText(text, title, sourceLabel, config, options) {
     console.error("Optimizing content...");
     try {
       raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+      const fixedTitle = await fixTitle(raw.rawText, raw.title, providerConfig);
+      if (fixedTitle !== raw.title) {
+        console.error(`Title updated: "${raw.title}" \u2192 "${fixedTitle}"`);
+        raw.title = fixedTitle;
+      }
     } catch (err) {
       console.error("Optimization failed, using raw text:", err.message);
     }
@@ -916,6 +969,11 @@ async function runPipeline(url, type, config, options) {
       console.error("Optimizing transcript...");
       try {
         raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+        const fixedTitle = await fixTitle(raw.rawText, raw.title, providerConfig);
+        if (fixedTitle !== raw.title) {
+          console.error(`Title updated: "${raw.title}" \u2192 "${fixedTitle}"`);
+          raw.title = fixedTitle;
+        }
       } catch (err) {
         console.error("Transcript optimization failed, using raw text:", err.message);
       }
