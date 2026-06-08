@@ -68,6 +68,8 @@ export async function fixTitle(
 ): Promise<string> {
   if (!isGenericTitle(currentTitle)) return currentTitle;
 
+  console.error(`Detected generic title: "${currentTitle}", generating better one...`);
+
   // Use first ~1000 chars of content for context
   const snippet = text.slice(0, 1000);
 
@@ -95,10 +97,13 @@ export async function fixTitle(
 
     const generated = response.choices[0]?.message?.content?.trim();
     if (generated && generated.length > 2 && generated.length < 100) {
-      return generated.replace(/^["'《]|["'》]$/g, '');
+      const cleaned = generated.replace(/^["'《]|["'》]$/g, '');
+      console.error(`Generated title: "${cleaned}"`);
+      return cleaned;
     }
-  } catch {
-    // If title generation fails, keep the original
+    console.error('Generated title was empty or too short, keeping original');
+  } catch (err) {
+    console.error(`Title generation failed: ${(err as Error).message}`);
   }
 
   return currentTitle;

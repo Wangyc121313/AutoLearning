@@ -26,14 +26,18 @@ export async function runPipelineFromText(
     console.error('Optimizing content...');
     try {
       raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+    } catch (err) {
+      console.error('Optimization failed, using raw text:', (err as Error).message);
+    }
 
+    try {
       const fixedTitle = await fixTitle(raw.rawText, raw.title, providerConfig);
       if (fixedTitle !== raw.title) {
         console.error(`Title updated: "${raw.title}" → "${fixedTitle}"`);
         raw.title = fixedTitle;
       }
     } catch (err) {
-      console.error('Optimization failed, using raw text:', (err as Error).message);
+      console.error('Title fix failed, keeping original:', (err as Error).message);
     }
   }
 
@@ -89,15 +93,19 @@ export async function runPipeline(
       console.error('Optimizing transcript...');
       try {
         raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+      } catch (err) {
+        console.error('Transcript optimization failed, using raw text:', (err as Error).message);
+      }
 
-        // Fix generic titles (e.g. "来看看这段对话" from ChatGPT shared pages)
+      // Fix generic titles (e.g. "来看看这段对话" from ChatGPT shared pages)
+      try {
         const fixedTitle = await fixTitle(raw.rawText, raw.title, providerConfig);
         if (fixedTitle !== raw.title) {
           console.error(`Title updated: "${raw.title}" → "${fixedTitle}"`);
           raw.title = fixedTitle;
         }
       } catch (err) {
-        console.error('Transcript optimization failed, using raw text:', (err as Error).message);
+        console.error('Title fix failed, keeping original:', (err as Error).message);
       }
     }
   }

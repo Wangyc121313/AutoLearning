@@ -885,6 +885,7 @@ function isGenericTitle(title) {
 }
 async function fixTitle(text, currentTitle, config) {
   if (!isGenericTitle(currentTitle)) return currentTitle;
+  console.error(`Detected generic title: "${currentTitle}", generating better one...`);
   const snippet = text.slice(0, 1e3);
   const client = new OpenAI2({
     apiKey: config.apiKey ?? "",
@@ -911,9 +912,13 @@ Generate a title:`
     });
     const generated = response.choices[0]?.message?.content?.trim();
     if (generated && generated.length > 2 && generated.length < 100) {
-      return generated.replace(/^["'《]|["'》]$/g, "");
+      const cleaned = generated.replace(/^["'《]|["'》]$/g, "");
+      console.error(`Generated title: "${cleaned}"`);
+      return cleaned;
     }
-  } catch {
+    console.error("Generated title was empty or too short, keeping original");
+  } catch (err) {
+    console.error(`Title generation failed: ${err.message}`);
   }
   return currentTitle;
 }
@@ -927,13 +932,17 @@ async function runPipelineFromText(text, title, sourceLabel, config, options) {
     console.error("Optimizing content...");
     try {
       raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+    } catch (err) {
+      console.error("Optimization failed, using raw text:", err.message);
+    }
+    try {
       const fixedTitle = await fixTitle(raw.rawText, raw.title, providerConfig);
       if (fixedTitle !== raw.title) {
         console.error(`Title updated: "${raw.title}" \u2192 "${fixedTitle}"`);
         raw.title = fixedTitle;
       }
     } catch (err) {
-      console.error("Optimization failed, using raw text:", err.message);
+      console.error("Title fix failed, keeping original:", err.message);
     }
   }
   const content = parseContent(raw, sourceLabel, "text");
@@ -969,13 +978,17 @@ async function runPipeline(url, type, config, options) {
       console.error("Optimizing transcript...");
       try {
         raw.rawText = await optimizeTranscript(raw.rawText, providerConfig);
+      } catch (err) {
+        console.error("Transcript optimization failed, using raw text:", err.message);
+      }
+      try {
         const fixedTitle = await fixTitle(raw.rawText, raw.title, providerConfig);
         if (fixedTitle !== raw.title) {
           console.error(`Title updated: "${raw.title}" \u2192 "${fixedTitle}"`);
           raw.title = fixedTitle;
         }
       } catch (err) {
-        console.error("Transcript optimization failed, using raw text:", err.message);
+        console.error("Title fix failed, keeping original:", err.message);
       }
     }
   }
