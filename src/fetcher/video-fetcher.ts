@@ -88,7 +88,7 @@ export class VideoFetcher implements Fetcher {
       '--postprocessor-args', 'ffmpeg:-ac 1 -ar 16000',
       '--extract-audio',
       '--audio-format', 'm4a',
-      '--audio-quality', '192K',
+      '--audio-quality', '64K',
       '--no-playlist',
     ];
 

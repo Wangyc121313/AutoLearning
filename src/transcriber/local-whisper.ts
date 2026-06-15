@@ -23,6 +23,7 @@ export class LocalWhisperTranscriber implements Transcriber {
     return execFileSync(this.pythonPath, [SCRIPT_PATH, audioPath, this.config.modelSize], {
       encoding: 'utf-8',
       timeout: 1_800_000, // 30 minutes max
+      maxBuffer: 50 * 1024 * 1024, // 50MB — enough for very long transcripts
       env: { ...process.env, HF_HUB_OFFLINE: '1' },
     });
   }

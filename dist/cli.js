@@ -351,7 +351,7 @@ var VideoFetcher = class {
       "--audio-format",
       "m4a",
       "--audio-quality",
-      "192K",
+      "64K",
       "--no-playlist"
     ];
     if (this.options.cookiesFromBrowser) {
@@ -826,6 +826,8 @@ var LocalWhisperTranscriber = class {
       encoding: "utf-8",
       timeout: 18e5,
       // 30 minutes max
+      maxBuffer: 50 * 1024 * 1024,
+      // 50MB — enough for very long transcripts
       env: { ...process.env, HF_HUB_OFFLINE: "1" }
     });
   }
