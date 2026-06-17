@@ -523,7 +523,8 @@ var SYSTEM_PROMPT = `You are an expert study note writer. Given the content of a
 - Title: # followed by the topic
 - Opening: TL;DR blockquote + 1-2 sentences of context
 - Body: organize by logic flow, not by the order content appeared. Merge related points across the source
-- Section count: typically 3-6 ## sections. Don't over-fragment
+- Section count: scale with content length \u2014 3-4 sections for short content, 6-10 for long-form (1h+)
+- For long-form content: be thorough, include more details, quotes, and examples. The reader expects depth
 - End with source link on its own line
 
 **\u5173\u952E\u6D1E\u5BDF / Key Takeaways (the most important section, use the same language as the content):**
@@ -549,7 +550,7 @@ var ClaudeGenerator = class {
   async generate(content) {
     const result = await this.client.messages.create({
       model: this.config.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -594,7 +595,8 @@ var SYSTEM_PROMPT2 = `You are an expert study note writer. Given the content of 
 - Title: # followed by the topic
 - Opening: TL;DR blockquote + 1-2 sentences of context
 - Body: organize by logic flow, not by the order content appeared. Merge related points across the source
-- Section count: typically 3-6 ## sections. Don't over-fragment
+- Section count: scale with content length \u2014 3-4 sections for short content, 6-10 for long-form (1h+)
+- For long-form content: be thorough, include more details, quotes, and examples. The reader expects depth
 - End with source link on its own line
 
 **\u5173\u952E\u6D1E\u5BDF / Key Takeaways (the most important section, use the same language as the content):**
@@ -623,7 +625,7 @@ var OpenAIGenerator = class {
   async generate(content) {
     const result = await this.client.chat.completions.create({
       model: this.config.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [
         { role: "system", content: SYSTEM_PROMPT2 },
         {
@@ -667,7 +669,8 @@ var SYSTEM_PROMPT3 = `You are an expert study note writer. Given the content of 
 - Title: # followed by the topic
 - Opening: TL;DR blockquote + 1-2 sentences of context
 - Body: organize by logic flow, not by the order content appeared. Merge related points across the source
-- Section count: typically 3-6 ## sections. Don't over-fragment
+- Section count: scale with content length \u2014 3-4 sections for short content, 6-10 for long-form (1h+)
+- For long-form content: be thorough, include more details, quotes, and examples. The reader expects depth
 - End with source link on its own line
 
 **\u5173\u952E\u6D1E\u5BDF / Key Takeaways (the most important section, use the same language as the content):**
@@ -858,7 +861,7 @@ async function optimizeTranscript(rawText, config) {
   });
   const response = await client.chat.completions.create({
     model: config.model,
-    max_tokens: 4096,
+    max_tokens: 8192,
     temperature: 0.1,
     messages: [
       { role: "system", content: OPTIMIZE_PROMPT },

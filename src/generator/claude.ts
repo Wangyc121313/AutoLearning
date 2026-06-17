@@ -23,7 +23,8 @@ const SYSTEM_PROMPT = `You are an expert study note writer. Given the content of
 - Title: # followed by the topic
 - Opening: TL;DR blockquote + 1-2 sentences of context
 - Body: organize by logic flow, not by the order content appeared. Merge related points across the source
-- Section count: typically 3-6 ## sections. Don't over-fragment
+- Section count: scale with content length — 3-4 sections for short content, 6-10 for long-form (1h+)
+- For long-form content: be thorough, include more details, quotes, and examples. The reader expects depth
 - End with source link on its own line
 
 **关键洞察 / Key Takeaways (the most important section, use the same language as the content):**
@@ -50,7 +51,7 @@ export class ClaudeGenerator implements Generator {
   async generate(content: StructuredContent): Promise<string> {
     const result = await this.client.messages.create({
       model: this.config.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
         {

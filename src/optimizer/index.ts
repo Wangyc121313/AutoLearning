@@ -31,7 +31,7 @@ export async function optimizeTranscript(
 
   const response = await client.chat.completions.create({
     model: config.model,
-    max_tokens: 4096,
+    max_tokens: 8192,
     temperature: 0.1,
     messages: [
       { role: 'system', content: OPTIMIZE_PROMPT },
