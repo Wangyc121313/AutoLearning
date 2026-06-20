@@ -8,7 +8,10 @@ const SYSTEM_PROMPT = `You are an expert study note writer. Given the content of
 **Engage, don't just list.** Vary your structure based on what the content demands:
 - For conceptual topics: explain the "why" in prose paragraphs before listing the "what"
 - For comparisons: use tables
-- For processes or timelines: use numbered steps
+- For processes, workflows, or architecture: use \`\`\`mermaid flowcharts or sequence diagrams
+- For technical content: use \`\`\`language code blocks for key algorithms, formulas, or config examples
+- For mathematical concepts: use $inline$ or $$block$$ LaTeX when it adds clarity
+- For data or timelines: use mermaid pie charts, gantt charts, or markdown tables
 - For interviews/talks: highlight key quotes with > blockquotes
 
 **Make it memorable:**
