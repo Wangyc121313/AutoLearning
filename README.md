@@ -57,10 +57,21 @@ autolearn --help                       # 完整帮助
 
 ## 工作原理
 
-```
-     ┌─ 文本 ─→ r.jina.ai → cookie curl → Readability ──┐
-URL ─┤                                                   ├─→ Optimizer → Generator → sanitize → Output
-     └─ 视频 ─→ 字幕提取 → Whisper 转录(降级) ──────────┘
+```mermaid
+flowchart TD
+    U["URL"] --> D{"资源类型"}
+    D -->|文本| T1["r.jina.ai 代理"]
+    T1 -->|登录墙 / 失败| T2["浏览器 cookie curl"]
+    T2 -->|失败| T3["Node.js Readability"]
+    T1 --> TXT["文本内容"]
+    T2 --> TXT
+    T3 --> TXT
+    D -->|视频| V1["字幕提取（yt-dlp）"]
+    V1 -->|有内嵌字幕| TXT
+    V1 -->|无字幕| V2["下载音频（yt-dlp + ffmpeg）"]
+    V2 --> V3["Faster-Whisper 本地转录"]
+    V3 --> TXT
+    TXT --> PIPE["Optimizer → Generator → sanitize → Output"]
 ```
 
 **文本三级抓取**：r.jina.ai 代理（主）→ 浏览器 cookie curl（登录站点）→ Node.js Readability（兜底），自动检测登录墙并降级。
@@ -108,6 +119,19 @@ model_size = "base"          # tiny | base | small | medium | large
 `${VAR}` 自动展开为环境变量。
 
 ## 架构
+
+```mermaid
+flowchart LR
+    IN["URL / 文件 / stdin"] --> CLI["CLI<br/>Commander 参数解析"]
+    CLI --> FETCH["Fetcher<br/>TextFetcher / VideoFetcher"]
+    FETCH --> OPT["Optimizer<br/>LLM 清洗 / 纠错 / 分段"]
+    OPT --> PARSE["Parser<br/>HTML 清洗 / 规范化"]
+    PARSE --> GEN["Generator<br/>DeepSeek / Claude / OpenAI / Ollama"]
+    GEN --> SAN["sanitize<br/>过滤 AI 客套话"]
+    SAN --> OUT["Output<br/>Markdown / PDF"]
+    FETCH -. 视频无字幕 .-> TR["Transcriber<br/>Faster-Whisper / 阿里云"]
+    TR -.-> OPT
+```
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
