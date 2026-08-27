@@ -8,7 +8,7 @@
 
 ```bash
 pnpm install && pnpm build
-pnpm link --global          # 注册 autolearn 全局命令
+npm link                    # 注册 autolearn 全局命令
 
 # 立刻试用
 autolearn https://nodejs.org/en/about
