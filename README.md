@@ -1,10 +1,26 @@
 # AutoLearning
 
-[![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-blue)](https://claude.ai/code)
+<p align="center">
+  <b>从 URL 或本地文件，自动生成结构化 Markdown 学习笔记的 CLI 工具</b>
+</p>
 
-从 URL 或本地文件自动生成结构化 Markdown 学习笔记的 CLI 工具。
+<p align="center">
+  <img src="https://img.shields.io/badge/Built%20with-Claude%20Code-blue" alt="Built with Claude Code">
+  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="version 0.1.0">
+  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6" alt="TypeScript">
+</p>
 
-## 快速开始
+## ✨ 功能亮点
+
+- 📄 **文本 / 博客 / 专栏** —— 三级抓取降级（r.jina.ai → cookie curl → Readability），自动穿透登录墙
+- 🎬 **视频** —— 内嵌字幕优先（秒级），无字幕自动降级本地 Faster-Whisper 转录（分钟级）
+- 🧹 **内容清洗** —— LLM 去时间戳、纠错、去网页噪音、智能分段
+- 🤖 **多 AI 后端** —— DeepSeek / Claude / OpenAI / Ollama，随时切换
+- 📝 **双格式导出** —— Markdown / PDF，自动过滤 AI 客套话
+
+---
+
+## 🚀 快速开始
 
 ```bash
 pnpm install && pnpm build
@@ -12,7 +28,7 @@ npm link                    # 注册 autolearn 全局命令
 
 # 立刻试用
 autolearn https://nodejs.org/en/about
-autolearn -t video https://www.youtube.com/watch?v=xxx
+autolearn -t video https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1
 ```
 
 ### 前置依赖
@@ -23,9 +39,11 @@ autolearn -t video https://www.youtube.com/watch?v=xxx
 | Python 3.10+ + faster-whisper | 视频无字幕时 | `uv pip install faster-whisper` |
 | pandoc | `--format pdf` 导出 | `apt install pandoc` |
 
-文本/博客输入零额外依赖。
+> 文本 / 博客输入零额外依赖。
 
-## 使用
+---
+
+## 📖 使用
 
 ### 文本（文档、博客、专栏）
 
@@ -55,7 +73,9 @@ autolearn --force URL                  # 强制重新处理
 autolearn --help                       # 完整帮助
 ```
 
-## 工作原理
+---
+
+## 🔍 工作原理
 
 ```mermaid
 flowchart TD
@@ -74,15 +94,14 @@ flowchart TD
     TXT --> PIPE["Optimizer → Generator → sanitize → Output"]
 ```
 
-**文本三级抓取**：r.jina.ai 代理（主）→ 浏览器 cookie curl（登录站点）→ Node.js Readability（兜底），自动检测登录墙并降级。
+- **文本三级抓取**：r.jina.ai 代理（主）→ 浏览器 cookie curl（登录站点）→ Node.js Readability（兜底），自动检测登录墙并降级。
+- **视频双路径**：优先提取内嵌字幕（秒级），无字幕时下载音频用本地 Faster-Whisper 转录（分钟级），含 VTT 滚动去重。
+- **内容优化**：所有文本经 LLM 清洗（去时间戳、纠错、去网页噪音、智能分段），再生成笔记。
+- **笔记风格**：TL;DR 开篇 → 段落/表格/引用自适应排版 → 关键洞察收尾，自动过滤 AI 客套话，末尾附源链接。
 
-**视频双路径**：优先提取内嵌字幕（秒级），无字幕时下载音频用本地 Faster-Whisper 转录（分钟级），含 VTT 滚动去重。
+---
 
-**内容优化**：所有文本经 LLM 清洗（去时间戳、纠错、去网页噪音、智能分段），再生成笔记。
-
-**笔记风格**：TL;DR 开篇 → 段落/表格/引用自适应排版 → 关键洞察收尾，自动过滤 AI 客套话，末尾附源链接。
-
-## 配置
+## ⚙️ 配置
 
 `~/.autolearning/config.toml`：
 
@@ -118,7 +137,9 @@ model_size = "base"          # tiny | base | small | medium | large
 
 `${VAR}` 自动展开为环境变量。
 
-## 架构
+---
+
+## 🏗️ 架构
 
 ```mermaid
 flowchart LR
@@ -144,7 +165,9 @@ flowchart LR
 | Transcriber | `src/transcriber/` | 语音转文字（本地 Faster-Whisper / OpenAI Whisper API / 阿里云） |
 | Output | `src/output/` | Markdown/PDF 写入 + AI 客套话过滤 |
 
-## 开发
+---
+
+## 🧪 开发
 
 ```bash
 pnpm dev           # 开发运行（tsx）
